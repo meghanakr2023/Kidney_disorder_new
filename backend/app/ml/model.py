@@ -41,7 +41,6 @@ def get_model():
     global _model
     if _model is None:
         _model = build_model(num_classes=len(CLASSES))
-<<<<<<< HEAD
         model_path = os.path.join("models", "ct_model.pth")
         print(f"Trying to load model from: {os.path.abspath(model_path)}")
         print(f"File exists: {os.path.exists(model_path)}")
@@ -55,12 +54,6 @@ def get_model():
                 print("Model loaded successfully")
             except Exception as e:
                 print(f"Error loading model: {e}")
-=======
-        model_path = os.path.join(os.path.dirname(__file__), "../../models/ct_model.pth")
-        if os.path.exists(model_path):
-            _model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-            print(f"Loaded trained model from {model_path}")
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171
         else:
             print("No trained model found — using random weights (demo mode)")
         _model.to(DEVICE)

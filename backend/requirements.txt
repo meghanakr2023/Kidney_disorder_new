@@ -1,17 +1,8 @@
 flask==3.0.3
 flask-cors==4.0.1
-<<<<<<< HEAD
-Pillow==10.2.0
-=======
 Pillow==10.3.0
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171
 numpy==1.26.4
 opencv-python-headless==4.9.0.80
 torch==2.3.0
 torchvision==0.18.0
-<<<<<<< HEAD
 python-dotenv==1.0.1
-tqdm
-=======
-python-dotenv==1.0.1
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171

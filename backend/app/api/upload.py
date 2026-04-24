@@ -14,16 +14,10 @@ def upload_ct_scan():
         return jsonify(error="No file provided"), 400
 
     file = request.files['file']
-<<<<<<< HEAD
-    
+
     print(f"Uploaded file: {file.filename}, content type: {file.content_type}")
     if file.content_type not in ALLOWED_TYPES and not file.filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
         return jsonify(error="Unsupported file type. Use JPG or PNG."), 400
-=======
-
-    if file.content_type not in ALLOWED_TYPES:
-        return jsonify(error=f"Unsupported file type. Use JPG or PNG."), 400
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171
 
     content = file.read()
     if len(content) > MAX_SIZE_MB * 1024 * 1024:
@@ -35,16 +29,12 @@ def upload_ct_scan():
     filepath = os.path.join(UPLOAD_DIR, filename)
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-<<<<<<< HEAD
 
-=======
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171
     with open(filepath, "wb") as f:
         f.write(content)
 
     try:
         img = Image.open(filepath)
-<<<<<<< HEAD
         img.load()
         img.close()
     except Exception as e:
@@ -53,12 +43,6 @@ def upload_ct_scan():
         except:
             pass
         return jsonify(error="File is not a valid image. Please try a different image."), 400
-=======
-        img.verify()
-    except Exception:
-        os.remove(filepath)
-        return jsonify(error="File is not a valid image."), 400
->>>>>>> 29e6eecb1ec5419e4ad03a848cf86054c0bc3171
 
     return jsonify(
         file_id=file_id,

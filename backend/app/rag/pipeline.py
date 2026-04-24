@@ -1,183 +1,277 @@
 import os
 import json
-import re
+import base64
+import urllib.request
+import urllib.error
+from datetime import date
 
-MEDICAL_KB = {
-    "Tumor": {
-        "doctor": {
-            "scan_type": "Contrast-Enhanced CT Scan of Abdomen and Pelvis (Triphasic Protocol)",
-            "findings": (
-                "A well-defined heterogeneous solid mass is identified in the upper pole of the right kidney, "
-                "measuring approximately 4.2 x 3.8 x 3.5 cm. The lesion demonstrates irregular margins with "
-                "internal areas of necrosis and hemorrhage. Significant enhancement is noted in the arterial phase "
-                "with washout in the delayed phase, a pattern characteristic of clear cell renal cell carcinoma. "
-                "No evidence of renal vein or inferior vena cava thrombosis. No ipsilateral adrenal gland involvement. "
-                "Regional lymph nodes appear within normal size limits. Contralateral kidney is normal in size, "
-                "shape, and parenchymal enhancement. No hydronephrosis or perinephric fat stranding identified. "
-                "Liver, spleen, and pancreas appear unremarkable."
-            ),
-            "impression": (
-                "1. Solid renal mass in the upper pole of the right kidney measuring 4.2 x 3.8 cm with "
-                "enhancement pattern highly suspicious for renal cell carcinoma (RCC). Bosniak Category IV lesion.\n"
-                "2. No evidence of local invasion, lymphadenopathy, or distant metastasis on this study.\n"
-                "3. Clinical and urological correlation strongly advised. Tissue sampling or surgical intervention recommended."
-            ),
-            "recommendation": (
-                "1. Urgent urology referral within 1-2 weeks.\n"
-                "2. MRI abdomen with and without contrast for further lesion characterization.\n"
-                "3. CT chest for metastatic workup.\n"
-                "4. Laboratory investigations: CBC, CMP, LFTs, serum creatinine, urine cytology.\n"
-                "5. Nuclear medicine bone scan if clinically indicated.\n"
-                "6. Multidisciplinary tumor board discussion recommended.\n"
-                "7. Do not delay surgical consultation."
-            )
-        },
-        "patient": {
-            "what_found": (
-                "The CT scan has detected an abnormal growth (mass) on your right kidney measuring about 4 cm. "
-                "This mass has features that need urgent medical attention."
-            ),
-            "what_it_means": (
-                "A solid mass on the kidney can sometimes be a type of kidney cancer called Renal Cell Carcinoma. "
-                "However, only a specialist doctor can confirm this after further tests. "
-                "The good news is that it appears to be limited to the kidney with no spread detected at this time."
-            ),
-            "is_it_serious": (
-                "This finding is considered serious and requires prompt medical attention. "
-                "Please do not panic — many kidney masses are treated successfully when caught early. "
-                "You should see a urologist within the next 1-2 weeks."
-            ),
-            "what_to_do": (
-                "1. Book an appointment with a urologist as soon as possible.\n"
-                "2. Your doctor will likely order more tests such as an MRI or blood tests.\n"
-                "3. Do not ignore this finding — early treatment gives the best outcome.\n"
-                "4. Bring this report to your doctor appointment.\n"
-                "5. Avoid strenuous physical activity until cleared by your doctor."
-            ),
-            "reassurance": (
-                "Finding something on a scan can feel scary, but remember — this AI report is just a starting point. "
-                "Your doctor will review everything carefully and guide you through the next steps. "
-                "You are not alone in this process."
-            )
-        }
-    },
-    # ... (Cyst, Stone, Normal entries remain the same as your first version)
-    "Cyst": {
-        # ... (keeping your detailed Cyst structure)
-    },
-    "Stone": {
-        # ... (keeping your detailed Stone structure)
-    },
-    "Normal": {
-        # ... (keeping your detailed Normal structure)
-    }
-}
 
-def retrieve_context(prediction):
-    """Retrieve medical context for the given prediction."""
-    return MEDICAL_KB.get(prediction, MEDICAL_KB["Normal"])
+def _image_to_base64(image_path):
+    with open(image_path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
 
-def generate_report_with_llm(prediction, confidence, probabilities, patient_info, mode='doctor', api_key=None):
-    """Generate medical report using LLM or template fallback."""
-    context = retrieve_context(prediction)
-    
-    if api_key and api_key.startswith("sk-"):
+
+def generate_report_with_llm(prediction, confidence, probabilities, patient_info, mode='doctor', api_key=None, image_path=None):
+    gemini_key = api_key or os.getenv("GEMINI_API_KEY")
+
+    print(f"API key received: {gemini_key[:15] if gemini_key else 'None'}")
+    print(f"Image path: {image_path}")
+    print(f"Image exists: {os.path.exists(image_path) if image_path else False}")
+
+    if gemini_key and image_path and os.path.exists(image_path):
         try:
-            return _generate_with_anthropic(
+            print("Trying Gemini Vision...")
+            result = _generate_with_gemini(
                 prediction, confidence, probabilities,
-                patient_info, mode, context, api_key
+                patient_info, mode, gemini_key, image_path
             )
+            print("Gemini Vision success!")
+            return result
         except Exception as e:
-            print(f"LLM generation failed: {e}, falling back to templates")
-    
-    return _generate_from_template(
-        prediction, confidence, probabilities,
-        patient_info, mode, context
-    )
+            print(f"Gemini Vision failed: {e}, falling back to templates")
 
-def _generate_with_anthropic(prediction, confidence, probabilities, patient_info, mode, context, api_key):
-    """Generate report using Anthropic Claude API."""
-    import urllib.request
-    
+    print("Using template fallback")
+    return _generate_from_template(prediction, confidence, probabilities, patient_info, mode)
+
+
+def _generate_with_gemini(prediction, confidence, probabilities, patient_info, mode, api_key, image_path):
     name = patient_info.get("name", "Unknown")
     age = patient_info.get("age", "N/A")
     gender = patient_info.get("gender", "N/A")
-    scan_date = patient_info.get("scanDate", "N/A")
-    referring_doc = patient_info.get("referringDoctor", "N/A")
+    scan_date = patient_info.get("scanDate", str(date.today()))
+    ref_doc = patient_info.get("referringDoctor", "N/A")
     history = patient_info.get("clinicalHistory", "Not provided")
-    prob_str = ", ".join([f"{k}: {v}%" for k, v in probabilities.items()])
 
-    if mode == 'doctor':
-        prompt = f"""You are an expert radiologist. Generate a concise professional radiology report.
+    image_b64 = _image_to_base64(image_path)
+    ext = image_path.split(".")[-1].lower()
+    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
 
-Patient: {name}, {age}y, {gender}
-Scan Date: {scan_date} | Referring: Dr. {referring_doc}
-Clinical History: {history}
-AI Analysis: {prediction} (Confidence: {confidence}%)
-Class Probabilities: {prob_str}
-Medical Context: {context['doctor']['description'] if 'doctor' in context else ''}
+    if mode == "doctor":
+        prompt = f"""You are an expert radiologist generating a CT kidney scan report.
 
-Return ONLY a JSON object with these keys:
-- findings
-- impression
-- recommendation
-- scan_type
+Patient Details:
+- Name: {name}
+- Age: {age} years
+- Gender: {gender}
+- Scan Date: {scan_date}
+- Referring Doctor: Dr. {ref_doc}
+- Clinical History: {history}
 
-No markdown, no extra text."""
+AI Pre-Analysis: {prediction} detected with {confidence}% confidence.
+
+Carefully examine this CT scan image and generate a detailed patient-specific radiology report.
+Be specific to what you actually observe in THIS image.
+Estimate actual kidney measurements from the image.
+Describe the actual location, size, and appearance of any abnormality you see.
+Do NOT use generic template sentences — every finding must be specific to this scan.
+
+Return ONLY a valid JSON object with these exact keys:
+{{
+  "scan_type": "type of CT scan performed",
+  "technique": "detailed technique description",
+  "indication": "clinical indication based on history",
+  "findings_liver": "liver and biliary tract findings",
+  "findings_gallbladder": "gallbladder findings",
+  "findings_pancreas": "pancreas findings",
+  "findings_spleen": "spleen findings",
+  "findings_right_kidney": "specific right kidney findings with estimated measurements",
+  "findings_left_kidney": "specific left kidney findings with estimated measurements",
+  "findings_collecting_system": "collecting system findings",
+  "findings_urinary_bladder": "urinary bladder findings",
+  "findings_adrenals": "adrenal gland findings",
+  "findings_vessels": "vascular and lymph node findings",
+  "findings_others": "other abdominal findings",
+  "impression": "numbered impression points specific to this patient",
+  "recommendation": "numbered recommendations for this patient",
+  "ai_confidence": "{confidence}% confidence — {prediction} detected"
+}}
+
+Return ONLY the JSON. No markdown. No extra text."""
+
     else:
-        prompt = f"""You are helping a patient understand their CT scan results.
+        prompt = f"""You are a medical communicator helping a patient understand their CT kidney scan result.
 
-Patient: {name}, Age: {age}
-AI Detected: {prediction} (Confidence: {confidence}%)
-Context: {context['patient']['what_found'] if 'patient' in context else ''}
+Patient: {name}, Age: {age}, Gender: {gender}
+AI detected: {prediction} with {confidence}% confidence
+Clinical History: {history}
 
-Return ONLY a JSON object with these keys:
-- what_found
-- what_it_means
-- is_it_serious
-- what_to_do
-- reassurance
+Look at this CT scan image carefully.
+Generate a simple friendly explanation specific to what you actually see in this image.
+Use simple language a patient can understand. Be compassionate but honest.
 
-No markdown, no extra text."""
+Return ONLY a valid JSON object with these exact keys:
+{{
+  "what_found": "what was found in simple language specific to this scan",
+  "what_it_means": "what this means for this specific patient",
+  "is_it_serious": "how serious is this finding for this patient",
+  "what_to_do": "numbered steps of what to do next",
+  "reassurance": "a reassuring closing message"
+}}
+
+Return ONLY the JSON. No markdown. No extra text."""
 
     payload = json.dumps({
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 1000,
-        "messages": [{"role": "user", "content": prompt}]
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    },
+                    {
+                        "inline_data": {
+                            "mime_type": mime,
+                            "data": image_b64
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 2000
+        }
     }).encode("utf-8")
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+
     req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
+        url,
         data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01"
-        },
+        headers={"Content-Type": "application/json"},
         method="POST"
     )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"Gemini API Error: {error_body}")
+        raise
 
-    text = data["content"][0]["text"]
-    text = re.sub(r"```json\s*|\s*```", "", text).strip()
+    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    text = text.replace("```json", "").replace("```", "").strip()
     return json.loads(text)
 
-def _generate_from_template(prediction, confidence, probabilities, patient_info, mode, context):
-    """Generate report from predefined templates."""
-    if mode == 'doctor':
-        return {
-            "scan_type": context["doctor"]["scan_type"],
-            "findings": context["doctor"]["findings"],
-            "impression": context["doctor"]["impression"],
-            "recommendation": context["doctor"]["recommendation"]
+
+def _generate_from_template(prediction, confidence, probabilities, patient_info, mode):
+    name = patient_info.get("name", "Unknown")
+    age = patient_info.get("age", "N/A")
+    gender = patient_info.get("gender", "N/A")
+    history = patient_info.get("clinicalHistory", "Not provided")
+
+    FINDINGS = {
+        "Tumor": {
+            "scan_type": "Contrast-Enhanced CT Scan of Abdomen and Pelvis (Triphasic Protocol)",
+            "technique": "Plain and contrast-enhanced spiral CT scan of the abdomen and pelvis was performed employing 5 mm sections. 100 cc of non-ionic intravenous contrast was administered intravenously.",
+            "indication": history if history != "Not provided" else "Evaluation of renal mass / hematuria / flank pain",
+            "findings_liver": "Liver is normal in size and attenuation. No focal lesion. CBD and portal vein are normal.",
+            "findings_gallbladder": "Gallbladder is normal. No calculi or wall thickening.",
+            "findings_pancreas": "Pancreas is normal in size, shape, and density. No ductal dilatation.",
+            "findings_spleen": "Spleen is normal in size and architecture.",
+            "findings_right_kidney": "A heterogeneous solid mass is identified in the right kidney with irregular margins. Significant arterial phase enhancement with washout on delayed phase — pattern suspicious for renal cell carcinoma.",
+            "findings_left_kidney": "Left kidney is normal in size, shape, and parenchymal enhancement. No focal lesion.",
+            "findings_collecting_system": "Mild pelvicalyceal prominence on affected side. Contralateral collecting system not dilated.",
+            "findings_urinary_bladder": "Urinary bladder is adequately distended with smooth walls. No intraluminal filling defect.",
+            "findings_adrenals": "Both adrenal glands are normal.",
+            "findings_vessels": "Aorta and IVC are normal. No significant lymphadenopathy.",
+            "findings_others": "No free fluid or free air. Visualized bowel loops are unremarkable.",
+            "impression": "1. Solid renal mass with enhancement pattern suspicious for Renal Cell Carcinoma (RCC). Bosniak Category IV.\n2. No evidence of distant metastasis on this study.\n3. Urgent urology referral recommended.",
+            "recommendation": "1. Urgent urology referral within 1-2 weeks.\n2. MRI abdomen for further characterization.\n3. CT chest for metastatic workup.\n4. Laboratory: CBC, CMP, serum creatinine.\n5. Multidisciplinary tumor board discussion recommended.",
+            "ai_confidence": f"{confidence}% — Tumor detected"
+        },
+        "Cyst": {
+            "scan_type": "Contrast-Enhanced CT Scan of Abdomen and Pelvis",
+            "technique": "Plain and contrast-enhanced spiral CT scan performed employing 5 mm sections. 100 cc of non-ionic intravenous contrast administered.",
+            "indication": history if history != "Not provided" else "Evaluation of incidentally detected renal lesion",
+            "findings_liver": "Liver is normal in size and echotexture. No focal lesion.",
+            "findings_gallbladder": "Gallbladder is normal. No calculi.",
+            "findings_pancreas": "Pancreas is normal.",
+            "findings_spleen": "Spleen is normal.",
+            "findings_right_kidney": "Right kidney is normal in size, shape, and parenchymal density. No focal lesion or hydronephrosis.",
+            "findings_left_kidney": "A well-circumscribed hypodense lesion noted with near-water attenuation. No internal septations, calcifications, or solid components. No post-contrast enhancement.",
+            "findings_collecting_system": "Bilateral collecting systems are not dilated. No hydroureteronephrosis.",
+            "findings_urinary_bladder": "Urinary bladder is normal with smooth walls.",
+            "findings_adrenals": "Both adrenal glands are normal.",
+            "findings_vessels": "Aorta and IVC are within normal limits. No lymphadenopathy.",
+            "findings_others": "No free fluid or free air.",
+            "impression": "1. Simple renal cyst — Bosniak Category I.\n2. No features to suggest malignancy.\n3. No intervention required. Annual surveillance recommended.",
+            "recommendation": "1. No immediate intervention required.\n2. Annual renal ultrasound for surveillance.\n3. Return if symptoms develop.",
+            "ai_confidence": f"{confidence}% — Cyst detected"
+        },
+        "Stone": {
+            "scan_type": "CT Scan — Kidneys, Ureters and Bladder (CT KUB) — Non-Contrast Protocol",
+            "technique": "Non-contrast spiral CT scan performed employing 3 mm sections from dome of diaphragm to pubic symphysis.",
+            "indication": history if history != "Not provided" else "Evaluation of renal colic / flank pain / hematuria",
+            "findings_liver": "Liver is normal in size and attenuation.",
+            "findings_gallbladder": "Gallbladder is normal. No calculi.",
+            "findings_pancreas": "Pancreas is normal.",
+            "findings_spleen": "Spleen is normal.",
+            "findings_right_kidney": "A hyperdense calculus identified with high Hounsfield units consistent with calcium oxalate composition. Mild hydroureteronephrosis noted proximal to the calculus. Mild perinephric fat stranding consistent with active ureteral colic.",
+            "findings_left_kidney": "Left kidney is normal in size, outline, and echopattern. No calculus or hydronephrosis.",
+            "findings_collecting_system": "Hydroureteronephrosis on affected side secondary to obstructing calculus. Contralateral collecting system is not dilated.",
+            "findings_urinary_bladder": "Urinary bladder is partially distended with normal walls.",
+            "findings_adrenals": "Both adrenal glands are normal.",
+            "findings_vessels": "Aorta and IVC are normal. No lymphadenopathy.",
+            "findings_others": "No free fluid or free air.",
+            "impression": "1. Obstructing renal calculus with associated hydroureteronephrosis.\n2. Perinephric fat stranding consistent with active ureteral colic.\n3. Urgent urological evaluation recommended.",
+            "recommendation": "1. Urgent urology consultation within 24-48 hours.\n2. Adequate analgesia as needed.\n3. High fluid intake: minimum 2.5-3 litres per day.\n4. Repeat CT KUB in 4-6 weeks if conservative management pursued.",
+            "ai_confidence": f"{confidence}% — Stone detected"
+        },
+        "Normal": {
+            "scan_type": "Contrast-Enhanced CT Scan of Abdomen and Pelvis",
+            "technique": "Plain and contrast-enhanced spiral CT scan performed employing 5 mm sections. 100 cc of non-ionic intravenous contrast administered.",
+            "indication": history if history != "Not provided" else "Evaluation of abdominal pain / routine screening",
+            "findings_liver": "Liver is normal in size, shape, and architecture. No mass lesion or calcification. No intrahepatic biliary dilatation. CBD and portal vein are normal.",
+            "findings_gallbladder": "Gallbladder reveals normal lumen and walls. No calculus or wall thickening.",
+            "findings_pancreas": "Pancreas is normal in size and density. Uniform enhancement on post-contrast images. No calcification or ductal dilatation.",
+            "findings_spleen": "Spleen is normal in size and architecture.",
+            "findings_right_kidney": "Right kidney is normal in size, shape, and position. Normal corticomedullary differentiation. Symmetric homogeneous enhancement. No focal cortical lesion, calculus, or mass.",
+            "findings_left_kidney": "Left kidney is normal in size, shape, and position. Normal corticomedullary differentiation. No focal lesion, cyst, calculus, or hydronephrosis.",
+            "findings_collecting_system": "Bilateral collecting systems are not dilated. No hydroureteronephrosis.",
+            "findings_urinary_bladder": "Urinary bladder is adequately distended with smooth walls. No intraluminal filling defect.",
+            "findings_adrenals": "Both adrenal glands are normal in size and attenuation.",
+            "findings_vessels": "Aorta and IVC are normal in position and caliber. No significant lymphadenopathy.",
+            "findings_others": "Stomach and bowel loops show normal caliber. No ascites or free air.",
+            "impression": "1. No significant renal pathology identified.\n2. Both kidneys are normal in size, morphology, and enhancement.\n3. No urolithiasis, hydronephrosis, renal mass, or cystic lesion.",
+            "recommendation": "1. No renal intervention required.\n2. Continue routine annual health maintenance.\n3. Repeat imaging only if new symptoms develop.",
+            "ai_confidence": f"{confidence}% — Normal detected"
         }
-    else:  # patient mode
-        return {
-            "what_found": context["patient"]["what_found"],
-            "what_it_means": context["patient"]["what_it_means"],
-            "is_it_serious": context["patient"]["is_it_serious"],
-            "what_to_do": context["patient"]["what_to_do"],
-            "reassurance": context["patient"]["reassurance"]
+    }
+
+    data = FINDINGS.get(prediction, FINDINGS["Normal"])
+
+    if mode == "doctor":
+        return {k: v for k, v in data.items()}
+    else:
+        PATIENT = {
+            "Tumor": {
+                "what_found": "The CT scan has detected an abnormal solid growth on your kidney. This requires urgent medical attention.",
+                "what_it_means": "A solid mass on the kidney can sometimes indicate kidney cancer. Only a specialist can confirm this after further tests.",
+                "is_it_serious": "This finding is serious and requires prompt attention. Many kidney masses are treated successfully when found early.",
+                "what_to_do": "1. Book an appointment with a urologist immediately.\n2. Your doctor will order MRI or blood tests.\n3. Bring this report to your appointment.",
+                "reassurance": "Your doctor will guide you through every step. You are not alone in this process."
+            },
+            "Cyst": {
+                "what_found": "The CT scan found a simple fluid-filled sac called a cyst on your kidney.",
+                "what_it_means": "Simple kidney cysts are very common and almost always harmless. They are not cancer.",
+                "is_it_serious": "This is a low severity finding. Simple cysts rarely cause problems.",
+                "what_to_do": "1. Share this report with your doctor.\n2. Get a kidney ultrasound in about 12 months.\n3. Drink plenty of water daily.",
+                "reassurance": "This is a very common and harmless finding. Continue your normal life."
+            },
+            "Stone": {
+                "what_found": "The CT scan found a kidney stone causing a mild blockage.",
+                "what_it_means": "Kidney stones are hard deposits that can cause severe pain. The blockage means urine is not draining properly.",
+                "is_it_serious": "This needs medical attention within 1-2 days.",
+                "what_to_do": "1. See a urologist within 1-2 days.\n2. Drink 2.5-3 litres of water daily.\n3. Go to emergency if you develop fever or severe pain.",
+                "reassurance": "Kidney stones are very common and highly treatable."
+            },
+            "Normal": {
+                "what_found": "Great news! The CT scan did not find any problems with your kidneys.",
+                "what_it_means": "Your kidneys appear healthy and functioning normally.",
+                "is_it_serious": "This is not a serious finding. No urgent action required.",
+                "what_to_do": "1. Share with your doctor for final confirmation.\n2. Continue drinking plenty of water.\n3. Attend routine annual checkups.",
+                "reassurance": "A normal scan is great news. Continue taking care of your health."
+            }
         }
+        return PATIENT.get(prediction, PATIENT["Normal"])

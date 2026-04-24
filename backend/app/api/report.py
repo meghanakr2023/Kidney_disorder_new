@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 import os
-
 from app.rag.pipeline import generate_report_with_llm
 
 report_bp = Blueprint('report', __name__)
@@ -21,6 +20,16 @@ def generate_report():
         if field not in data:
             return jsonify(error=f"Missing field: {field}"), 400
 
+    filename = data.get('filename')
+    image_path = os.path.join("static/uploads", filename) if filename else None
+
+    gemini_key = data.get('api_key') or os.getenv("GEMINI_API_KEY")
+
+    print(f"Filename received: {filename}")
+    print(f"Image path: {image_path}")
+    print(f"Image exists: {os.path.exists(image_path) if image_path else False}")
+    print(f"API key received: {gemini_key[:15] if gemini_key else 'None'}")
+
     try:
         report_data = generate_report_with_llm(
             prediction=data['prediction'],
@@ -28,13 +37,15 @@ def generate_report():
             probabilities=data['probabilities'],
             patient_info=data['patient_info'],
             mode=mode,
-            api_key=data.get('api_key') or os.getenv("ANTHROPIC_API_KEY"),
+            api_key=gemini_key,
+            image_path=image_path
         )
     except Exception as e:
         return jsonify(error=f"Report generation failed: {str(e)}"), 500
 
     return jsonify(
         file_id=data['file_id'],
+         filename=filename,
         mode=mode,
         patient_info=data['patient_info'],
         prediction=data['prediction'],

@@ -31,14 +31,15 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
 
     try {
       const payload = {
-        file_id: uploadData.file_id,
-        prediction: analysisData.prediction,
-        confidence: analysisData.confidence,
-        probabilities: analysisData.probabilities,
-        patient_info: uploadData.patientInfo,
-        mode: 'doctor',
-        api_key: apiKey || null
-      }
+  file_id: uploadData.file_id,
+  filename: uploadData.filename,        // add this line
+  prediction: analysisData.prediction,
+  confidence: analysisData.confidence,
+  probabilities: analysisData.probabilities,
+  patient_info: uploadData.patientInfo,
+  mode: 'doctor',
+  api_key: apiKey || null
+}
 
       const result = await generateReport(payload)
       onReportDone(result)
@@ -140,19 +141,19 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
 
       {/* API Key input */}
       <div className="bg-slate-800 rounded-xl p-4 mb-4">
-        <h3 className="text-white font-semibold mb-2">Anthropic API Key (Optional)</h3>
-        <p className="text-slate-400 text-xs mb-3">
-          Provide your Claude API key for AI-powered report generation.
-          Without it, a template-based report will be generated instead.
-        </p>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-ant-..."
-          className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-        />
-      </div>
+  <h3 className="text-white font-semibold mb-2">Gemini API Key</h3>
+  <p className="text-slate-400 text-xs mb-3">
+    Already configured. Leave empty to use the default key.
+    Or paste your own Gemini key from aistudio.google.com.
+  </p>
+  <input
+    type="password"
+    value={apiKey}
+    onChange={(e) => setApiKey(e.target.value)}
+    placeholder="Leave empty — Gemini key already configured"
+    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
+  />
+</div>
 
       {/* AI Disclaimer */}
       <div className="bg-yellow-900/20 border border-yellow-600/40 rounded-xl px-4 py-3 mb-6">

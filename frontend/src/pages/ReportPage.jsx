@@ -16,14 +16,15 @@ function ReportPage({ reportData, analysisData, onBack }) {
     setLoadingPatient(true)
     try {
       const payload = {
-        file_id: reportData.file_id,
-        prediction: reportData.prediction,
-        confidence: reportData.confidence,
-        probabilities: analysisData.probabilities,
-        patient_info: reportData.patient_info,
-        mode: 'patient',
-        api_key: null
-      }
+  file_id: reportData.file_id,
+  filename: reportData.filename,
+  prediction: reportData.prediction,
+  confidence: reportData.confidence,
+  probabilities: analysisData.probabilities,
+  patient_info: reportData.patient_info,
+  mode: 'patient',
+  api_key: null
+}
       const result = await generateReport(payload)
       setPatientReport(result)
       setActiveTab('patient')
@@ -147,34 +148,73 @@ function ReportPage({ reportData, analysisData, onBack }) {
       </div>
 
       {/* Doctor Mode Report */}
-      {activeTab === 'doctor' && doctorReport && (
-        <div className="flex flex-col gap-4">
+{activeTab === 'doctor' && doctorReport && (
+  <div className="flex flex-col gap-4">
 
-          {doctorReport.scan_type && (
-            <div className="bg-slate-800 rounded-xl p-5">
-              <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Scan Type</h4>
-              <p className="text-white text-sm">{doctorReport.scan_type}</p>
-            </div>
-          )}
+    {doctorReport.scan_type && (
+      <div className="bg-slate-800 rounded-xl p-5">
+        <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Scan Type</h4>
+        <p className="text-white text-sm">{doctorReport.scan_type}</p>
+      </div>
+    )}
 
-          <div className="bg-slate-800 rounded-xl p-5">
-            <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Findings</h4>
-            <p className="text-white text-sm leading-relaxed">{doctorReport.findings}</p>
+    {doctorReport.technique && (
+      <div className="bg-slate-800 rounded-xl p-5">
+        <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Technique / Protocol</h4>
+        <p className="text-white text-sm leading-relaxed">{doctorReport.technique}</p>
+      </div>
+    )}
+
+    {doctorReport.indication && (
+      <div className="bg-slate-800 rounded-xl p-5">
+        <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Clinical Indication</h4>
+        <p className="text-white text-sm leading-relaxed">{doctorReport.indication}</p>
+      </div>
+    )}
+
+    <div className="bg-slate-800 rounded-xl p-5">
+      <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Findings</h4>
+      <div className="flex flex-col gap-3">
+        {[
+          ["Liver & Biliary Tract", doctorReport.findings_liver],
+          ["Gall Bladder", doctorReport.findings_gallbladder],
+          ["Pancreas", doctorReport.findings_pancreas],
+          ["Spleen", doctorReport.findings_spleen],
+          ["Right Kidney", doctorReport.findings_right_kidney],
+          ["Left Kidney", doctorReport.findings_left_kidney],
+          ["Collecting System", doctorReport.findings_collecting_system],
+          ["Urinary Bladder", doctorReport.findings_urinary_bladder],
+          ["Adrenals", doctorReport.findings_adrenals],
+          ["Vessels & Lymph Nodes", doctorReport.findings_vessels],
+          ["Others", doctorReport.findings_others],
+        ].map(([label, value]) => value && (
+          <div key={label} className="border-l-2 border-slate-600 pl-3">
+            <p className="text-green-400 text-xs font-semibold mb-1">{label}</p>
+            <p className="text-white text-sm leading-relaxed">{value}</p>
           </div>
+        ))}
+      </div>
+    </div>
 
-          <div className="bg-slate-800 rounded-xl p-5">
-            <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Impression</h4>
-            <p className="text-white text-sm leading-relaxed">{doctorReport.impression}</p>
-          </div>
+    <div className="bg-slate-800 rounded-xl p-5">
+      <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Impression</h4>
+      <p className="text-white text-sm leading-relaxed whitespace-pre-line">{doctorReport.impression}</p>
+    </div>
 
-          <div className="bg-slate-800 rounded-xl p-5">
-            <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Recommendations</h4>
-            <p className="text-white text-sm leading-relaxed whitespace-pre-line">{doctorReport.recommendation}</p>
-          </div>
+    <div className="bg-slate-800 rounded-xl p-5">
+      <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Recommendations</h4>
+      <p className="text-white text-sm leading-relaxed whitespace-pre-line">{doctorReport.recommendation}</p>
+    </div>
 
-        </div>
-      )}
+    {doctorReport.ai_confidence && (
+      <div className="bg-slate-700 rounded-xl p-4">
+        <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-1">AI Analysis</h4>
+        <p className="text-blue-300 text-sm">{doctorReport.ai_confidence}</p>
+      </div>
+    )}
 
+  </div>
+)}
       {/* Patient Mode Report */}
       {activeTab === 'patient' && patientReportData && (
         <div className="flex flex-col gap-4">

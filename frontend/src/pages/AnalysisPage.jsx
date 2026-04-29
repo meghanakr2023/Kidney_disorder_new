@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, ArrowRight, Brain, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ChevronRight, AlertTriangle, ShieldAlert, Activity, User } from 'lucide-react'
 import HeatmapViewer from '../components/HeatmapViewer'
 import ConfidenceChart from '../components/ConfidenceChart'
 import { generateReport } from '../utils/api'
@@ -10,26 +10,19 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
 
   const isAnomaly = analysisData?.anomaly?.is_anomaly || false
 
-  const getSeverityColor = (prediction) => {
-    if (prediction === 'Tumor') return 'text-red-400 bg-red-900/30 border-red-500'
-    if (prediction === 'Stone') return 'text-yellow-400 bg-yellow-900/30 border-yellow-500'
-    if (prediction === 'Cyst') return 'text-blue-400 bg-blue-900/30 border-blue-500'
-    if (prediction === 'Normal') return 'text-green-400 bg-green-900/30 border-green-500'
-    return 'text-slate-400 bg-slate-800 border-slate-600'
-  }
-
-  const getSeverityLabel = (prediction) => {
-    if (prediction === 'Tumor') return 'High Severity — Urgent Attention Required'
-    if (prediction === 'Stone') return 'Moderate Severity — Medical Attention Needed'
-    if (prediction === 'Cyst') return 'Low Severity — Routine Follow-up'
-    if (prediction === 'Normal') return 'No Abnormality Detected'
-    return ''
+  const getSeverityConfig = (prediction) => {
+    const configs = {
+      'Tumor': { label: 'High Severity', sublabel: 'Urgent Attention Required', cssClass: 'severity-tumor', dot: '#ff4757' },
+      'Stone': { label: 'Moderate Severity', sublabel: 'Medical Attention Needed', cssClass: 'severity-stone', dot: '#ffd32a' },
+      'Cyst': { label: 'Low Severity', sublabel: 'Routine Follow-up', cssClass: 'severity-cyst', dot: '#00d4ff' },
+      'Normal': { label: 'No Pathology', sublabel: 'No Abnormality Detected', cssClass: 'severity-normal', dot: '#00e5a0' },
+    }
+    return configs[prediction] || configs['Normal']
   }
 
   const handleGenerateReport = async () => {
     setLoading(true)
     setError(null)
-
     try {
       const payload = {
         file_id: uploadData.file_id,
@@ -43,203 +36,228 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
         measurements: analysisData.measurements || {},
         is_anomaly: isAnomaly,
       }
-
       const result = await generateReport(payload)
       onReportDone(result)
-
     } catch (err) {
-      setError('Failed to generate report. Please try again.')
+      setError('Report generation failed. Please try again.')
       console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
+  const sev = getSeverityConfig(analysisData?.prediction)
+
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto animate-fade-in" style={{ padding: '40px 0' }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
-          <h2 className="text-3xl font-bold text-white mb-1">Analysis Results</h2>
-          <p className="text-slate-400">AI prediction for {uploadData?.patientInfo?.name}</p>
+          <p className="label" style={{ marginBottom: '8px' }}>Step 02</p>
+          <h2 className="font-display" style={{ fontSize: '28px', color: 'var(--text-primary)', marginBottom: '8px' }}>
+            AI Analysis Results
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            EfficientNet-B3 classification with Grad-CAM explainability
+          </p>
         </div>
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
-        >
-          <ArrowLeft size={16} />
-          Back
+        <button className="btn-secondary" onClick={onBack}>
+          <ArrowLeft size={14} /> Back
         </button>
       </div>
 
-      {/* ── ANOMALY DETECTED — show warning, hide classification ── */}
+      {/* ANOMALY BLOCK */}
       {isAnomaly ? (
-        <div className="bg-orange-900/30 border-2 border-orange-500 rounded-xl px-6 py-6 mb-6">
-
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-4xl">⚠️</span>
+        <div style={{
+          padding: '28px',
+          borderRadius: '16px',
+          background: 'rgba(255,71,87,0.06)',
+          border: '1px solid rgba(255,71,87,0.25)',
+          marginBottom: '24px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+            <div style={{
+              width: '48px', height: '48px',
+              background: 'rgba(255,71,87,0.15)',
+              border: '1px solid rgba(255,71,87,0.3)',
+              borderRadius: '12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <ShieldAlert size={22} color="var(--accent-red)" />
+            </div>
             <div>
-              <p className="text-orange-400 font-bold text-lg">
-                UNKNOWN SCAN PATTERN DETECTED
-              </p>
-              <p className="text-orange-300 text-sm mt-1">
-                Anomaly Score: {analysisData.anomaly.score}/100
+              <h3 style={{ color: 'var(--accent-red)', fontSize: '16px', fontWeight: 700 }}>
+                Unknown Scan Pattern Detected
+              </h3>
+              <p style={{ color: 'rgba(255,71,87,0.7)', fontSize: '12px', marginTop: '2px' }}>
+                Anomaly Score: {analysisData.anomaly.score}/100 — Out-of-distribution input
               </p>
             </div>
           </div>
 
-          <p className="text-orange-200 text-sm leading-relaxed mb-4">
-            This scan does not match any of the four kidney conditions this
-            system was trained on (Tumor, Cyst, Stone, Normal). The image
-            may belong to a completely different organ or contain an unusual
-            kidney condition not seen during training.
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6, marginBottom: '16px' }}>
+            This image does not match the distribution of kidney CT scans used to train this model.
+            The scan may represent a different organ, imaging modality, or an unusual renal condition
+            not present in the training dataset.
           </p>
 
-          <div className="bg-orange-950/50 rounded-lg px-4 py-3 mb-4">
-            <p className="text-orange-300 text-sm font-semibold mb-1">
-              ❌ AI Classification Result Hidden
-            </p>
-            <p className="text-orange-200 text-xs">
-              Showing a kidney classification for this scan would be
-              misleading and clinically dangerous. The result has been
-              hidden to prevent misdiagnosis.
-            </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{
+              padding: '12px 16px', borderRadius: '10px',
+              background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.2)'
+            }}>
+              <p style={{ color: 'var(--accent-red)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                ✕ Classification Hidden
+              </p>
+              <p style={{ color: 'rgba(255,71,87,0.7)', fontSize: '12px' }}>
+                Displaying a kidney classification for this scan would be clinically misleading.
+              </p>
+            </div>
+            <div style={{
+              padding: '12px 16px', borderRadius: '10px',
+              background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.2)'
+            }}>
+              <p style={{ color: 'var(--accent-red)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                ⚕ Action Required
+              </p>
+              <p style={{ color: 'rgba(255,71,87,0.7)', fontSize: '12px' }}>
+                Upload a proper kidney CT scan or consult a specialist for evaluation.
+              </p>
+            </div>
           </div>
-
-          <div className="bg-red-950/50 border border-red-500/50 rounded-lg px-4 py-3">
-            <p className="text-red-300 text-sm font-semibold">
-              🏥 Action Required
-            </p>
-            <p className="text-red-200 text-xs mt-1">
-              Please upload a proper kidney CT scan image.
-              If this is a kidney scan, consult a qualified radiologist
-              as this may indicate an unusual condition requiring
-              specialist evaluation.
-            </p>
-          </div>
-
         </div>
 
       ) : (
-
-        // ── NORMAL — show full classification results ──
         <>
-          {/* Normal anomaly confirmation */}
-          <div className="bg-green-900/10 border border-green-700/30 rounded-xl px-4 py-2 mb-4">
-            <p className="text-green-500 text-xs">
-              ✓ {analysisData?.anomaly?.message}
+          {/* Confidence strip */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 16px', borderRadius: '8px',
+            background: 'rgba(0,229,160,0.06)',
+            border: '1px solid rgba(0,229,160,0.2)',
+            marginBottom: '20px'
+          }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-green)' }} />
+            <p style={{ color: 'var(--accent-green)', fontSize: '12px', fontWeight: 500 }}>
+              {analysisData?.anomaly?.message || 'Scan within expected distribution'}
             </p>
           </div>
 
-          {/* Prediction Banner */}
-          <div className={`border rounded-xl px-6 py-4 mb-6 flex items-center justify-between ${getSeverityColor(analysisData?.prediction)}`}>
-            <div className="flex items-center gap-3">
-              <Brain size={28} />
+          {/* Prediction banner */}
+          <div className={`card ${sev.cssClass}`} style={{
+            padding: '20px 24px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '48px', height: '48px',
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: '12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <Activity size={22} />
+              </div>
               <div>
-                <p className="text-sm opacity-70">AI Prediction</p>
-                <p className="text-2xl font-bold">{analysisData?.label}</p>
+                <p style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>
+                  AI Prediction
+                </p>
+                <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Playfair Display, serif', lineHeight: 1 }}>
+                  {analysisData?.label}
+                </p>
+                <p style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px' }}>{sev.sublabel}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm opacity-70">Confidence</p>
-              <p className="text-2xl font-bold">{analysisData?.confidence}%</p>
+
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', opacity: 0.7, marginBottom: '4px' }}>
+                Confidence
+              </p>
+              <p style={{ fontSize: '36px', fontWeight: 700, fontFamily: 'DM Mono, monospace', lineHeight: 1 }}>
+                {analysisData?.confidence}%
+              </p>
             </div>
           </div>
 
-          {/* Severity label */}
-          <div className="flex items-center gap-2 mb-6">
-            <AlertCircle size={16} className="text-slate-400" />
-            <p className="text-slate-400 text-sm">
-              {getSeverityLabel(analysisData?.prediction)}
-            </p>
-          </div>
-
-          {/* Main content grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-
-            {/* Heatmap */}
+          {/* Main grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <HeatmapViewer
               originalB64={analysisData?.original_b64}
               heatmapB64={analysisData?.heatmap_b64}
               overlayB64={analysisData?.overlay_b64}
             />
-
-            {/* Chart + Patient Info */}
-            <div className="flex flex-col gap-4">
-
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <ConfidenceChart
                 probabilities={analysisData?.probabilities || {}}
                 prediction={analysisData?.prediction}
               />
 
-              {/* Patient summary */}
-              <div className="bg-slate-800 rounded-xl p-4">
-                <h3 className="text-white font-semibold mb-3">Patient Summary</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-slate-500">Name</p>
-                    <p className="text-white">{uploadData?.patientInfo?.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Age</p>
-                    <p className="text-white">{uploadData?.patientInfo?.age}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Gender</p>
-                    <p className="text-white">{uploadData?.patientInfo?.gender}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Scan Date</p>
-                    <p className="text-white">{uploadData?.patientInfo?.scanDate}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Referring Doctor</p>
-                    <p className="text-white">
-                      {uploadData?.patientInfo?.referringDoctor || 'N/A'}
-                    </p>
-                  </div>
+              {/* Patient summary card */}
+              <div className="card p-4">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <User size={14} color="var(--text-muted)" />
+                  <p className="label" style={{ margin: 0 }}>Patient Summary</p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    ['Name', uploadData?.patientInfo?.name],
+                    ['Age', uploadData?.patientInfo?.age + ' years'],
+                    ['Gender', uploadData?.patientInfo?.gender],
+                    ['Scan Date', uploadData?.patientInfo?.scanDate],
+                    ['Referring Dr.', uploadData?.patientInfo?.referringDoctor || 'N/A'],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>{label}</p>
+                      <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500 }}>{value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-
             </div>
           </div>
 
-          {/* AI Disclaimer */}
-          <div className="bg-yellow-900/20 border border-yellow-600/40 rounded-xl px-4 py-3 mb-6">
-            <p className="text-yellow-300 text-xs">
-              ⚠️ This analysis is AI-assisted and intended to support
-              clinical decision-making only. Final diagnosis must be
-              confirmed by a qualified radiologist.
+          {/* Disclaimer */}
+          <div style={{
+            padding: '12px 16px', borderRadius: '10px',
+            background: 'rgba(255,211,42,0.06)',
+            border: '1px solid rgba(255,211,42,0.2)',
+            display: 'flex', alignItems: 'flex-start', gap: '10px',
+            marginBottom: '20px'
+          }}>
+            <AlertTriangle size={14} color="var(--accent-yellow)" style={{ marginTop: '1px', flexShrink: 0 }} />
+            <p style={{ color: 'rgba(255,211,42,0.8)', fontSize: '12px', lineHeight: 1.5 }}>
+              This analysis is AI-assisted and intended to support clinical decision-making only.
+              Final diagnosis must be confirmed by a qualified radiologist.
             </p>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="mb-4 bg-red-900/40 border border-red-500 text-red-300 rounded-lg px-4 py-3 text-sm">
-              {error}
+            <div style={{
+              padding: '12px 16px', borderRadius: '10px',
+              background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.3)',
+              display: 'flex', gap: '10px', marginBottom: '16px'
+            }}>
+              <AlertTriangle size={14} color="var(--accent-red)" style={{ flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ color: 'var(--accent-red)', fontSize: '13px' }}>{error}</p>
             </div>
           )}
 
-          {/* Generate Report Button */}
-          <div className="text-center">
-            <button
-              onClick={handleGenerateReport}
-              disabled={loading}
-              className="bg-green-500 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold px-10 py-3 rounded-xl transition-all text-sm flex items-center gap-2 mx-auto"
-            >
-              {loading ? 'Generating Report...' : (
-                <>
-                  Generate Medical Report
-                  <ArrowRight size={16} />
-                </>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn-primary" onClick={handleGenerateReport} disabled={loading}>
+              {loading ? (
+                <><div className="spinner" /> Generating Report...</>
+              ) : (
+                <>Generate Clinical Report <ChevronRight size={16} /></>
               )}
             </button>
           </div>
-
         </>
       )}
-
     </div>
   )
 }

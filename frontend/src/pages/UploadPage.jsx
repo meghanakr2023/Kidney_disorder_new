@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { Upload, User, Calendar, Stethoscope } from 'lucide-react'
+import { Upload, User, ChevronRight, FileImage, Calendar, Stethoscope, ClipboardList, AlertTriangle } from 'lucide-react'
 import { uploadScan, predictScan } from '../utils/api'
 
 function UploadPage({ onAnalysisDone }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
   const [error, setError] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const [patientInfo, setPatientInfo] = useState({
     name: '',
@@ -28,6 +30,7 @@ function UploadPage({ onAnalysisDone }) {
 
   const handleDrop = (e) => {
     e.preventDefault()
+    setDragOver(false)
     const dropped = e.dataTransfer.files[0]
     if (dropped) {
       setFile(dropped)
@@ -36,143 +39,191 @@ function UploadPage({ onAnalysisDone }) {
     }
   }
 
-  const handleDragOver = (e) => {
-    e.preventDefault()
-  }
-
   const handleInputChange = (e) => {
     setPatientInfo({ ...patientInfo, [e.target.name]: e.target.value })
   }
 
   const handleSubmit = async () => {
-    if (!file) {
-      setError('Please upload a CT scan image first')
-      return
-    }
+    if (!file) { setError('Please upload a CT scan image'); return }
     if (!patientInfo.name || !patientInfo.age || !patientInfo.gender || !patientInfo.scanDate) {
-      setError('Please fill in all required fields')
-      return
+      setError('Please fill in all required patient fields'); return
     }
 
     setLoading(true)
     setError(null)
 
     try {
-      // Step 1: Upload the image
+      setLoadingStep('Uploading scan...')
       const uploadResult = await uploadScan(file)
 
-      // Step 2: Run AI prediction
+      setLoadingStep('Running AI analysis...')
       const analysisResult = await predictScan(uploadResult.file_id, uploadResult.filename)
 
-      // Step 3: Pass data to App.jsx
-      onAnalysisDone(
-        { ...uploadResult, patientInfo },
-        analysisResult
-      )
-
+      onAnalysisDone({ ...uploadResult, patientInfo }, analysisResult)
     } catch (err) {
-      setError('Something went wrong. Make sure Flask backend is running on port 8000.')
+      setError('Connection failed. Ensure the backend is running on port 8000.')
       console.error(err)
     } finally {
       setLoading(false)
+      setLoadingStep('')
     }
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto animate-fade-in" style={{ padding: '40px 0' }}>
 
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">Upload CT Scan</h2>
-        <p className="text-slate-400">Upload a kidney CT scan image and fill in patient details</p>
+      {/* Page header */}
+      <div style={{ marginBottom: '36px' }}>
+        <p className="label" style={{ marginBottom: '8px' }}>Step 01</p>
+        <h2 className="font-display" style={{ fontSize: '28px', color: 'var(--text-primary)', marginBottom: '8px' }}>
+          Patient Registration & Scan Upload
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', maxWidth: '500px' }}>
+          Upload a kidney CT scan image and provide patient information to begin AI-assisted analysis.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
 
-        {/* Left — Image Upload */}
-        <div className="bg-slate-800 rounded-xl p-6">
-          <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-            <Upload size={18} className="text-green-400" />
-            CT Scan Image
-          </h3>
+        {/* LEFT — Scan Upload */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div style={{ background: 'rgba(0,212,255,0.1)', borderRadius: '8px', padding: '8px' }}>
+              <FileImage size={16} color="var(--accent-cyan)" />
+            </div>
+            <div>
+              <p className="label" style={{ margin: 0 }}>CT Scan Image</p>
+              <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>Upload Imaging File</p>
+            </div>
+          </div>
 
           {/* Drop zone */}
           <div
+            className="upload-zone"
             onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            className="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-green-500 transition-colors"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
             onClick={() => document.getElementById('fileInput').click()}
+            style={{
+              padding: '24px',
+              textAlign: 'center',
+              minHeight: '220px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              borderColor: dragOver ? 'var(--accent-cyan)' : undefined,
+              background: dragOver ? 'rgba(0,212,255,0.04)' : undefined,
+              marginBottom: '12px'
+            }}
           >
             {preview ? (
-              <img
-                src={preview}
-                alt="CT Preview"
-                className="max-h-48 mx-auto object-contain rounded-lg"
-              />
-            ) : (
-              <div>
-                <Upload size={40} className="text-slate-500 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm">Drag and drop or click to upload</p>
-                <p className="text-slate-500 text-xs mt-1">Supports JPG, PNG</p>
+              <div style={{ width: '100%' }}>
+                <img
+                  src={preview}
+                  alt="CT Preview"
+                  style={{ maxHeight: '180px', margin: '0 auto', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
+                />
               </div>
+            ) : (
+              <>
+                <div style={{
+                  width: '52px', height: '52px',
+                  background: 'rgba(0,212,255,0.06)',
+                  border: '1px solid rgba(0,212,255,0.15)',
+                  borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <Upload size={22} color="var(--accent-cyan)" />
+                </div>
+                <p style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, marginBottom: '6px' }}>
+                  Drop CT scan here
+                </p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '12px' }}>
+                  or click to browse files
+                </p>
+                <div style={{
+                  display: 'flex', gap: '6px', justifyContent: 'center'
+                }}>
+                  {['JPEG', 'PNG', 'DCM'].map(fmt => (
+                    <span key={fmt} style={{
+                      padding: '2px 8px', borderRadius: '4px',
+                      fontSize: '10px', fontWeight: 600,
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontFamily: 'DM Mono, monospace',
+                      letterSpacing: '0.04em'
+                    }}>{fmt}</span>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
-          <input
-            id="fileInput"
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          <input id="fileInput" type="file" accept="image/*,.dcm" onChange={handleFileChange} style={{ display: 'none' }} />
 
           {file && (
-            <p className="text-green-400 text-sm mt-2 text-center">
-              Selected: {file.name}
-            </p>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 12px', borderRadius: '8px',
+              background: 'rgba(0,229,160,0.08)',
+              border: '1px solid rgba(0,229,160,0.2)'
+            }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-green)', flexShrink: 0 }} />
+              <p style={{ color: 'var(--accent-green)', fontSize: '12px', fontWeight: 500 }}>
+                {file.name}
+              </p>
+            </div>
           )}
+
+          {/* Info boxes */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            {[
+              { label: 'Max Size', value: '20 MB' },
+              { label: 'Format', value: 'JPG / PNG / DCM' },
+            ].map(item => (
+              <div key={item.label} style={{
+                flex: 1, padding: '10px 12px', borderRadius: '8px',
+                background: 'var(--bg-secondary)', border: '1px solid var(--border)'
+              }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '3px' }}>{item.label}</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, fontFamily: 'DM Mono, monospace' }}>{item.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Right — Patient Info */}
-        <div className="bg-slate-800 rounded-xl p-6">
-          <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-            <User size={18} className="text-green-400" />
-            Patient Information
-          </h3>
+        {/* RIGHT — Patient Info */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div style={{ background: 'rgba(0,229,160,0.1)', borderRadius: '8px', padding: '8px' }}>
+              <User size={16} color="var(--accent-green)" />
+            </div>
+            <div>
+              <p className="label" style={{ margin: 0 }}>Patient Data</p>
+              <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>Clinical Information</p>
+            </div>
+          </div>
 
-          <div className="flex flex-col gap-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
             <div>
-              <label className="text-slate-400 text-sm mb-1 block">Patient Name *</label>
-              <input
-                type="text"
-                name="name"
-                value={patientInfo.name}
-                onChange={handleInputChange}
-                placeholder="Enter patient name"
-                className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-              />
+              <label className="label">Full Name <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+              <input className="input-field" type="text" name="name" value={patientInfo.name}
+                onChange={handleInputChange} placeholder="Patient full name" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label className="text-slate-400 text-sm mb-1 block">Age *</label>
-                <input
-                  type="number"
-                  name="age"
-                  value={patientInfo.age}
-                  onChange={handleInputChange}
-                  placeholder="Age"
-                  className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-                />
+                <label className="label">Age <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+                <input className="input-field" type="number" name="age" value={patientInfo.age}
+                  onChange={handleInputChange} placeholder="Years" min="1" max="120" />
               </div>
               <div>
-                <label className="text-slate-400 text-sm mb-1 block">Gender *</label>
-                <select
-                  name="gender"
-                  value={patientInfo.gender}
-                  onChange={handleInputChange}
-                  className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-                >
+                <label className="label">Gender <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+                <select className="input-field" name="gender" value={patientInfo.gender} onChange={handleInputChange}>
                   <option value="">Select</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -182,60 +233,69 @@ function UploadPage({ onAnalysisDone }) {
             </div>
 
             <div>
-              <label className="text-slate-400 text-sm mb-1 block">Scan Date *</label>
-              <input
-                type="date"
-                name="scanDate"
-                value={patientInfo.scanDate}
-                onChange={handleInputChange}
-                className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-              />
+              <label className="label">
+                <Calendar size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                Scan Date <span style={{ color: 'var(--accent-red)' }}>*</span>
+              </label>
+              <input className="input-field" type="date" name="scanDate" value={patientInfo.scanDate}
+                onChange={handleInputChange} />
             </div>
 
             <div>
-              <label className="text-slate-400 text-sm mb-1 block">Referring Doctor</label>
-              <input
-                type="text"
-                name="referringDoctor"
-                value={patientInfo.referringDoctor}
-                onChange={handleInputChange}
-                placeholder="Doctor name"
-                className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-              />
+              <label className="label">
+                <Stethoscope size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                Referring Physician
+              </label>
+              <input className="input-field" type="text" name="referringDoctor" value={patientInfo.referringDoctor}
+                onChange={handleInputChange} placeholder="Dr. Name" />
             </div>
 
             <div>
-              <label className="text-slate-400 text-sm mb-1 block">Clinical History</label>
-              <textarea
-                name="clinicalHistory"
-                value={patientInfo.clinicalHistory}
+              <label className="label">
+                <ClipboardList size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                Clinical History
+              </label>
+              <textarea className="input-field" name="clinicalHistory" value={patientInfo.clinicalHistory}
                 onChange={handleInputChange}
-                placeholder="Any relevant medical history..."
+                placeholder="Symptoms, prior conditions, medications..."
                 rows={3}
-                className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500 resize-none"
+                style={{ resize: 'none' }}
               />
             </div>
 
           </div>
         </div>
-
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mt-4 bg-red-900/40 border border-red-500 text-red-300 rounded-lg px-4 py-3 text-sm">
-          {error}
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          borderRadius: '10px',
+          background: 'rgba(255,71,87,0.08)',
+          border: '1px solid rgba(255,71,87,0.3)',
+          display: 'flex', alignItems: 'center', gap: '10px'
+        }}>
+          <AlertTriangle size={16} color="var(--accent-red)" />
+          <p style={{ color: 'var(--accent-red)', fontSize: '13px' }}>{error}</p>
         </div>
       )}
 
-      {/* Submit Button */}
-      <div className="mt-6 text-center">
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="bg-green-500 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold px-10 py-3 rounded-xl transition-all text-sm"
-        >
-          {loading ? 'Analyzing... Please wait' : 'Analyze CT Scan'}
+      {/* Submit */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+        <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
+          {loading ? (
+            <>
+              <div className="spinner" />
+              {loadingStep || 'Processing...'}
+            </>
+          ) : (
+            <>
+              Begin AI Analysis
+              <ChevronRight size={16} />
+            </>
+          )}
         </button>
       </div>
 

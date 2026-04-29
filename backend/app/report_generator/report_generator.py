@@ -342,7 +342,20 @@ def _generate_with_openrouter(prediction, confidence, probabilities,
 
     text = data["choices"][0]["message"]["content"]
     text = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        if text.count('"') % 2 != 0:
+            text = text + '"'
+        open_braces = text.count('{') - text.count('}')
+        if open_braces > 0:
+            text = text + ('}' * open_braces)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            print(f"OpenRouter JSON parse failed even after fix: {e}")
+            raise Exception(f"OpenRouter returned malformed JSON: {e}")
 
 def _generate_with_openai(prediction, confidence, probabilities,
                            patient_info, mode, image_path,
@@ -596,3 +609,53 @@ def _generate_from_template(prediction, confidence, probabilities, patient_info,
             }
         }
         return PATIENT.get(prediction, PATIENT["Normal"])
+def translate_report(report_data, target_language, mode='doctor'):
+    groq_key = os.getenv("GROQ_API_KEY")
+
+    language_names = {
+        'kn': 'Kannada', 'hi': 'Hindi', 'ta': 'Tamil',
+        'te': 'Telugu',  'ml': 'Malayalam', 'mr': 'Marathi',
+    }
+    language_name = language_names.get(target_language, 'Hindi')
+    print(f"Translating report to {language_name}...")
+
+    report_json = json.dumps(report_data, ensure_ascii=False, indent=2)
+
+    prompt = f"""You are a medical translator. Translate the following medical report JSON from English to {language_name}.
+
+STRICT RULES:
+1. Translate ONLY the values, never the keys
+2. Keep all medical terms accurate in {language_name}
+3. Use simple language that a common person understands
+4. Keep numbers, percentages, and measurements as-is
+5. Return ONLY valid JSON with the same structure
+6. Do not add markdown or extra text
+
+Report to translate:
+{report_json}
+
+Return ONLY the translated JSON. Same keys, translated values."""
+
+    if groq_key:
+        try:
+            from groq import Groq
+            client = Groq(api_key=groq_key)
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a medical translator. Always respond with valid JSON only. No markdown."},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+                temperature=0.1,
+                max_tokens=3000,
+            )
+            text = chat_completion.choices[0].message.content
+            text = text.replace("```json", "").replace("```", "").strip()
+            translated = json.loads(text)
+            print(f"Translation to {language_name} successful!")
+            return translated
+        except Exception as e:
+            print(f"Groq translation failed: {e}")
+
+    print("Translation failed — returning English report")
+    return report_data

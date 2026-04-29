@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import os
 from app.report_generator.report_generator import generate_report_with_llm
+from app.report_generator.report_generator import translate_report as translate_report_llm
 
 report_bp = Blueprint('report', __name__)
 
@@ -79,7 +80,7 @@ def translate_report_endpoint():
         return jsonify(error=f"Unsupported language. Choose from: {supported}"), 400
 
     try:
-        translated = translate_report(report, target_language, mode)
+        translated = translate_report_llm(report, target_language, mode)
     except Exception as e:
         import traceback
         traceback.print_exc()

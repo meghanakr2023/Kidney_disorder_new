@@ -11,30 +11,83 @@ def _image_to_base64(image_path):
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-def generate_report_with_llm(prediction, confidence, probabilities, patient_info, mode='doctor', api_key=None, image_path=None):
+def generate_report_with_llm(prediction, confidence, probabilities, patient_info,
+                              mode='doctor', api_key=None, image_path=None,
+                              measurements=None):
     gemini_key = api_key or os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
 
-    print(f"API key received: {gemini_key[:15] if gemini_key else 'None'}")
     print(f"Image path: {image_path}")
     print(f"Image exists: {os.path.exists(image_path) if image_path else False}")
+    print(f"Measurements available: {measurements.get('available', False) if measurements else False}")
 
+    # 1. Try Gemini first
     if gemini_key and image_path and os.path.exists(image_path):
         try:
             print("Trying Gemini Vision...")
             result = _generate_with_gemini(
                 prediction, confidence, probabilities,
-                patient_info, mode, gemini_key, image_path
+                patient_info, mode, gemini_key, image_path,
+                measurements=measurements or {},
             )
             print("Gemini Vision success!")
             return result
         except Exception as e:
-            print(f"Gemini Vision failed: {e}, falling back to templates")
+            print(f"Gemini failed: {e}")
 
+    # 2. Try OpenAI second — reliable vision
+    if openai_key and image_path and os.path.exists(image_path):
+        try:
+            print("Trying OpenAI GPT-4o Vision...")
+            result = _generate_with_openai(
+                prediction, confidence, probabilities,
+                patient_info, mode, image_path,
+                measurements=measurements or {},
+            )
+            print("OpenAI success!")
+            return result
+        except Exception as e:
+            print(f"OpenAI failed: {e}")
+
+    # 3. Try OpenRouter third
+    if openrouter_key and image_path and os.path.exists(image_path):
+        try:
+            print("Trying OpenRouter Vision...")
+            result = _generate_with_openrouter(
+                prediction, confidence, probabilities,
+                patient_info, mode, image_path,
+                measurements=measurements or {},
+            )
+            print("OpenRouter success!")
+            return result
+        except Exception as e:
+            print(f"OpenRouter failed: {e}")
+
+    # 4. Try Groq fourth — text only
+    if groq_key:
+        try:
+            print("Trying Groq...")
+            result = _generate_with_groq(
+                prediction, confidence, probabilities,
+                patient_info, mode, groq_key,
+                measurements=measurements or {},
+            )
+            print("Groq success!")
+            return result
+        except Exception as e:
+            print(f"Groq failed: {e}")
+
+    # 5. Final fallback
     print("Using template fallback")
-    return _generate_from_template(prediction, confidence, probabilities, patient_info, mode)
+    return _generate_from_template(
+        prediction, confidence, probabilities, patient_info, mode
+    )
 
 
-def _generate_with_gemini(prediction, confidence, probabilities, patient_info, mode, api_key, image_path):
+def _build_prompts(prediction, confidence, probabilities,
+                   patient_info, mode, measurements=None):
     name = patient_info.get("name", "Unknown")
     age = patient_info.get("age", "N/A")
     gender = patient_info.get("gender", "N/A")
@@ -42,9 +95,16 @@ def _generate_with_gemini(prediction, confidence, probabilities, patient_info, m
     ref_doc = patient_info.get("referringDoctor", "N/A")
     history = patient_info.get("clinicalHistory", "Not provided")
 
-    image_b64 = _image_to_base64(image_path)
-    ext = image_path.split(".")[-1].lower()
-    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+    if measurements and measurements.get('available'):
+        meas_text = f"""
+Calibrated Measurements from DICOM (USE THESE EXACT VALUES):
+- Lesion size: {measurements['width_mm']} x {measurements['height_mm']} mm
+- Lesion area: {measurements['area_cm2']} cm²
+- Mean HU value: {measurements['hu_mean']} HU
+- HU range: {measurements['hu_min']} to {measurements['hu_max']} HU
+"""
+    else:
+        meas_text = "Note: JPG input — estimate measurements visually. State these are visual estimates."
 
     if mode == "doctor":
         prompt = f"""You are an expert radiologist generating a CT kidney scan report.
@@ -59,11 +119,10 @@ Patient Details:
 
 AI Pre-Analysis: {prediction} detected with {confidence}% confidence.
 
-Carefully examine this CT scan image and generate a detailed patient-specific radiology report.
-Be specific to what you actually observe in THIS image.
-Estimate actual kidney measurements from the image.
-Describe the actual location, size, and appearance of any abnormality you see.
-Do NOT use generic template sentences — every finding must be specific to this scan.
+{meas_text}
+
+Generate a detailed patient-specific radiology report.
+Be specific. Do NOT use generic template sentences.
 
 Return ONLY a valid JSON object with these exact keys:
 {{
@@ -74,8 +133,8 @@ Return ONLY a valid JSON object with these exact keys:
   "findings_gallbladder": "gallbladder findings",
   "findings_pancreas": "pancreas findings",
   "findings_spleen": "spleen findings",
-  "findings_right_kidney": "specific right kidney findings with estimated measurements",
-  "findings_left_kidney": "specific left kidney findings with estimated measurements",
+  "findings_right_kidney": "specific right kidney findings with measurements",
+  "findings_left_kidney": "specific left kidney findings with measurements",
   "findings_collecting_system": "collecting system findings",
   "findings_urinary_bladder": "urinary bladder findings",
   "findings_adrenals": "adrenal gland findings",
@@ -89,34 +148,74 @@ Return ONLY a valid JSON object with these exact keys:
 Return ONLY the JSON. No markdown. No extra text."""
 
     else:
-        prompt = f"""You are a medical communicator helping a patient understand their CT kidney scan result.
+        prompt = f"""You are a medical communicator helping a patient understand their CT kidney scan.
 
 Patient: {name}, Age: {age}, Gender: {gender}
 AI detected: {prediction} with {confidence}% confidence
 Clinical History: {history}
 
-Look at this CT scan image carefully.
-Generate a simple friendly explanation specific to what you actually see in this image.
-Use simple language a patient can understand. Be compassionate but honest.
+{meas_text}
+
+Generate a simple friendly explanation in plain language.
 
 Return ONLY a valid JSON object with these exact keys:
 {{
-  "what_found": "what was found in simple language specific to this scan",
-  "what_it_means": "what this means for this specific patient",
-  "is_it_serious": "how serious is this finding for this patient",
+  "what_found": "what was found in simple language",
+  "what_it_means": "what this means for this patient",
+  "is_it_serious": "how serious is this finding",
   "what_to_do": "numbered steps of what to do next",
   "reassurance": "a reassuring closing message"
 }}
 
 Return ONLY the JSON. No markdown. No extra text."""
 
+    return prompt
+
+
+def _generate_with_gemini(prediction, confidence, probabilities, patient_info,
+                           mode, api_key, image_path, measurements=None):
+    prompt = _build_prompts(
+        prediction, confidence, probabilities,
+        patient_info, mode, measurements
+    )
+
+    ext = image_path.split(".")[-1].lower()
+    if ext == 'dcm':
+        import pydicom
+        import numpy as np
+        from PIL import Image
+        import io
+
+        ds = pydicom.dcmread(image_path)
+        raw_pixels = ds.pixel_array.astype(np.float32)
+        slope = float(getattr(ds, 'RescaleSlope', 1.0))
+        intercept = float(getattr(ds, 'RescaleIntercept', 0.0))
+        hu = raw_pixels * slope + intercept
+
+        wc = float(getattr(ds, 'WindowCenter', 40))
+        ww = float(getattr(ds, 'WindowWidth', 400))
+        if isinstance(wc, (list, tuple)): wc = wc[0]
+        if isinstance(ww, (list, tuple)): ww = ww[0]
+
+        lower = wc - ww / 2
+        upper = wc + ww / 2
+        windowed = np.clip(hu, lower, upper)
+        normalized = ((windowed - lower) / (upper - lower) * 255).astype(np.uint8)
+
+        pil_img = Image.fromarray(normalized).convert('RGB')
+        buf = io.BytesIO()
+        pil_img.save(buf, format='PNG')
+        image_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        mime = "image/png"
+    else:
+        image_b64 = _image_to_base64(image_path)
+        mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+
     payload = json.dumps({
         "contents": [
             {
                 "parts": [
-                    {
-                        "text": prompt
-                    },
+                    {"text": prompt},
                     {
                         "inline_data": {
                             "mime_type": mime,
@@ -132,7 +231,7 @@ Return ONLY the JSON. No markdown. No extra text."""
         }
     }).encode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={api_key}"
 
     req = urllib.request.Request(
         url,
@@ -150,6 +249,228 @@ Return ONLY the JSON. No markdown. No extra text."""
         raise
 
     text = data["candidates"][0]["content"]["parts"][0]["text"]
+    text = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(text)
+
+
+def _generate_with_openrouter(prediction, confidence, probabilities,
+                               patient_info, mode, image_path,
+                               measurements=None):
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise Exception("No OpenRouter key found")
+
+    prompt = _build_prompts(
+        prediction, confidence, probabilities,
+        patient_info, mode, measurements
+    )
+
+    ext = image_path.split(".")[-1].lower()
+    if ext == 'dcm':
+        import pydicom
+        import numpy as np
+        from PIL import Image
+        import io as io_module
+
+        ds = pydicom.dcmread(image_path)
+        raw_pixels = ds.pixel_array.astype(np.float32)
+        slope = float(getattr(ds, 'RescaleSlope', 1.0))
+        intercept = float(getattr(ds, 'RescaleIntercept', 0.0))
+        hu = raw_pixels * slope + intercept
+
+        wc = float(getattr(ds, 'WindowCenter', 40))
+        ww = float(getattr(ds, 'WindowWidth', 400))
+        if isinstance(wc, (list, tuple)): wc = wc[0]
+        if isinstance(ww, (list, tuple)): ww = ww[0]
+
+        lower = wc - ww / 2
+        upper = wc + ww / 2
+        windowed = np.clip(hu, lower, upper)
+        normalized = ((windowed - lower) / (upper - lower) * 255).astype(np.uint8)
+
+        pil_img = Image.fromarray(normalized).convert('RGB')
+        buf = io_module.BytesIO()
+        pil_img.save(buf, format='PNG')
+        image_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        mime = "image/png"
+    else:
+        image_b64 = _image_to_base64(image_path)
+        mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+
+    payload = json.dumps({
+        "model": "openrouter/free",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{image_b64}"
+                        }
+                    }
+                ]
+            }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2000,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openrouter_key}",
+            "HTTP-Referer": "http://localhost:3000",
+            "X-Title": "AI Radiology Assistant"
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"OpenRouter Error: {error_body}")
+        raise
+
+    text = data["choices"][0]["message"]["content"]
+    text = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(text)
+
+def _generate_with_openai(prediction, confidence, probabilities,
+                           patient_info, mode, image_path,
+                           measurements=None):
+    """
+    Generate report using OpenAI GPT-4o Vision.
+    Reads actual CT image. Very reliable. ~$0.005 per request.
+    """
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        raise Exception("No OpenAI key found")
+
+    prompt = _build_prompts(
+        prediction, confidence, probabilities,
+        patient_info, mode, measurements
+    )
+
+    # Encode image
+    ext = image_path.split(".")[-1].lower()
+    if ext == 'dcm':
+        import pydicom
+        import numpy as np
+        from PIL import Image
+        import io as io_module
+
+        ds = pydicom.dcmread(image_path)
+        raw_pixels = ds.pixel_array.astype(np.float32)
+        slope = float(getattr(ds, 'RescaleSlope', 1.0))
+        intercept = float(getattr(ds, 'RescaleIntercept', 0.0))
+        hu = raw_pixels * slope + intercept
+
+        wc = float(getattr(ds, 'WindowCenter', 40))
+        ww = float(getattr(ds, 'WindowWidth', 400))
+        if isinstance(wc, (list, tuple)): wc = wc[0]
+        if isinstance(ww, (list, tuple)): ww = ww[0]
+
+        lower = wc - ww / 2
+        upper = wc + ww / 2
+        windowed = np.clip(hu, lower, upper)
+        normalized = ((windowed - lower) / (upper - lower) * 255).astype(np.uint8)
+
+        pil_img = Image.fromarray(normalized).convert('RGB')
+        buf = io_module.BytesIO()
+        pil_img.save(buf, format='PNG')
+        image_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        mime = "image/png"
+    else:
+        image_b64 = _image_to_base64(image_path)
+        mime = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+
+    payload = json.dumps({
+        "model": "gpt-4o",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are an expert radiologist. Always respond with valid JSON only."
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{image_b64}",
+                            "detail": "high"
+                        }
+                    }
+                ]
+            }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2000,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openai_key}",
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        print(f"OpenAI Error: {error_body}")
+        raise
+
+    text = data["choices"][0]["message"]["content"]
+    text = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(text)
+
+def _generate_with_groq(prediction, confidence, probabilities, patient_info,
+                         mode, api_key, measurements=None):
+    from groq import Groq
+
+    prompt = _build_prompts(
+        prediction, confidence, probabilities,
+        patient_info, mode, measurements
+    )
+
+    client = Groq(api_key=api_key)
+
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert radiologist. Always respond with valid JSON only."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        model="llama-3.3-70b-versatile",
+        temperature=0.2,
+        max_tokens=2000,
+    )
+
+    text = chat_completion.choices[0].message.content
     text = text.replace("```json", "").replace("```", "").strip()
     return json.loads(text)
 

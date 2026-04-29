@@ -6,3 +6,5 @@ opencv-python-headless==4.9.0.80
 torch==2.3.0
 torchvision==0.18.0
 python-dotenv==1.0.1
+pydicom
+tqdm

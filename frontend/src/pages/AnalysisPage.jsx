@@ -7,7 +7,8 @@ import { generateReport } from '../utils/api'
 function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [apiKey, setApiKey] = useState('')
+
+  const isAnomaly = analysisData?.anomaly?.is_anomaly || false
 
   const getSeverityColor = (prediction) => {
     if (prediction === 'Tumor') return 'text-red-400 bg-red-900/30 border-red-500'
@@ -31,15 +32,17 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
 
     try {
       const payload = {
-  file_id: uploadData.file_id,
-  filename: uploadData.filename,        // add this line
-  prediction: analysisData.prediction,
-  confidence: analysisData.confidence,
-  probabilities: analysisData.probabilities,
-  patient_info: uploadData.patientInfo,
-  mode: 'doctor',
-  api_key: apiKey || null
-}
+        file_id: uploadData.file_id,
+        filename: uploadData.filename,
+        prediction: analysisData.prediction,
+        confidence: analysisData.confidence,
+        probabilities: analysisData.probabilities,
+        patient_info: uploadData.patientInfo,
+        mode: 'doctor',
+        api_key: null,
+        measurements: analysisData.measurements || {},
+        is_anomaly: isAnomaly,
+      }
 
       const result = await generateReport(payload)
       onReportDone(result)
@@ -70,121 +73,172 @@ function AnalysisPage({ uploadData, analysisData, onReportDone, onBack }) {
         </button>
       </div>
 
-      {/* Prediction Banner */}
-      <div className={`border rounded-xl px-6 py-4 mb-6 flex items-center justify-between ${getSeverityColor(analysisData?.prediction)}`}>
-        <div className="flex items-center gap-3">
-          <Brain size={28} />
-          <div>
-            <p className="text-sm opacity-70">AI Prediction</p>
-            <p className="text-2xl font-bold">{analysisData?.label}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-sm opacity-70">Confidence</p>
-          <p className="text-2xl font-bold">{analysisData?.confidence}%</p>
-        </div>
-      </div>
+      {/* ── ANOMALY DETECTED — show warning, hide classification ── */}
+      {isAnomaly ? (
+        <div className="bg-orange-900/30 border-2 border-orange-500 rounded-xl px-6 py-6 mb-6">
 
-      {/* Severity label */}
-      <div className="flex items-center gap-2 mb-6">
-        <AlertCircle size={16} className="text-slate-400" />
-        <p className="text-slate-400 text-sm">{getSeverityLabel(analysisData?.prediction)}</p>
-      </div>
-
-      {/* Main content grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-
-        {/* Heatmap */}
-        <HeatmapViewer
-          originalB64={analysisData?.original_b64}
-          heatmapB64={analysisData?.heatmap_b64}
-          overlayB64={analysisData?.overlay_b64}
-        />
-
-        {/* Chart + Patient Info */}
-        <div className="flex flex-col gap-4">
-
-          <ConfidenceChart
-            probabilities={analysisData?.probabilities || {}}
-            prediction={analysisData?.prediction}
-          />
-
-          {/* Patient summary */}
-          <div className="bg-slate-800 rounded-xl p-4">
-            <h3 className="text-white font-semibold mb-3">Patient Summary</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-slate-500">Name</p>
-                <p className="text-white">{uploadData?.patientInfo?.name}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Age</p>
-                <p className="text-white">{uploadData?.patientInfo?.age}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Gender</p>
-                <p className="text-white">{uploadData?.patientInfo?.gender}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Scan Date</p>
-                <p className="text-white">{uploadData?.patientInfo?.scanDate}</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Referring Doctor</p>
-                <p className="text-white">{uploadData?.patientInfo?.referringDoctor || 'N/A'}</p>
-              </div>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-4xl">⚠️</span>
+            <div>
+              <p className="text-orange-400 font-bold text-lg">
+                UNKNOWN SCAN PATTERN DETECTED
+              </p>
+              <p className="text-orange-300 text-sm mt-1">
+                Anomaly Score: {analysisData.anomaly.score}/100
+              </p>
             </div>
           </div>
 
+          <p className="text-orange-200 text-sm leading-relaxed mb-4">
+            This scan does not match any of the four kidney conditions this
+            system was trained on (Tumor, Cyst, Stone, Normal). The image
+            may belong to a completely different organ or contain an unusual
+            kidney condition not seen during training.
+          </p>
+
+          <div className="bg-orange-950/50 rounded-lg px-4 py-3 mb-4">
+            <p className="text-orange-300 text-sm font-semibold mb-1">
+              ❌ AI Classification Result Hidden
+            </p>
+            <p className="text-orange-200 text-xs">
+              Showing a kidney classification for this scan would be
+              misleading and clinically dangerous. The result has been
+              hidden to prevent misdiagnosis.
+            </p>
+          </div>
+
+          <div className="bg-red-950/50 border border-red-500/50 rounded-lg px-4 py-3">
+            <p className="text-red-300 text-sm font-semibold">
+              🏥 Action Required
+            </p>
+            <p className="text-red-200 text-xs mt-1">
+              Please upload a proper kidney CT scan image.
+              If this is a kidney scan, consult a qualified radiologist
+              as this may indicate an unusual condition requiring
+              specialist evaluation.
+            </p>
+          </div>
+
         </div>
-      </div>
 
-      {/* API Key input */}
-      <div className="bg-slate-800 rounded-xl p-4 mb-4">
-  <h3 className="text-white font-semibold mb-2">Gemini API Key</h3>
-  <p className="text-slate-400 text-xs mb-3">
-    Already configured. Leave empty to use the default key.
-    Or paste your own Gemini key from aistudio.google.com.
-  </p>
-  <input
-    type="password"
-    value={apiKey}
-    onChange={(e) => setApiKey(e.target.value)}
-    placeholder="Leave empty — Gemini key already configured"
-    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:border-green-500"
-  />
-</div>
+      ) : (
 
-      {/* AI Disclaimer */}
-      <div className="bg-yellow-900/20 border border-yellow-600/40 rounded-xl px-4 py-3 mb-6">
-        <p className="text-yellow-300 text-xs">
-          ⚠️ This analysis is AI-assisted and intended to support clinical decision-making only.
-          Final diagnosis must be confirmed by a qualified radiologist.
-        </p>
-      </div>
+        // ── NORMAL — show full classification results ──
+        <>
+          {/* Normal anomaly confirmation */}
+          <div className="bg-green-900/10 border border-green-700/30 rounded-xl px-4 py-2 mb-4">
+            <p className="text-green-500 text-xs">
+              ✓ {analysisData?.anomaly?.message}
+            </p>
+          </div>
 
-      {/* Error */}
-      {error && (
-        <div className="mb-4 bg-red-900/40 border border-red-500 text-red-300 rounded-lg px-4 py-3 text-sm">
-          {error}
-        </div>
-      )}
+          {/* Prediction Banner */}
+          <div className={`border rounded-xl px-6 py-4 mb-6 flex items-center justify-between ${getSeverityColor(analysisData?.prediction)}`}>
+            <div className="flex items-center gap-3">
+              <Brain size={28} />
+              <div>
+                <p className="text-sm opacity-70">AI Prediction</p>
+                <p className="text-2xl font-bold">{analysisData?.label}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm opacity-70">Confidence</p>
+              <p className="text-2xl font-bold">{analysisData?.confidence}%</p>
+            </div>
+          </div>
 
-      {/* Generate Report Button */}
-      <div className="text-center">
-        <button
-          onClick={handleGenerateReport}
-          disabled={loading}
-          className="bg-green-500 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold px-10 py-3 rounded-xl transition-all text-sm flex items-center gap-2 mx-auto"
-        >
-          {loading ? 'Generating Report...' : (
-            <>
-              Generate Medical Report
-              <ArrowRight size={16} />
-            </>
+          {/* Severity label */}
+          <div className="flex items-center gap-2 mb-6">
+            <AlertCircle size={16} className="text-slate-400" />
+            <p className="text-slate-400 text-sm">
+              {getSeverityLabel(analysisData?.prediction)}
+            </p>
+          </div>
+
+          {/* Main content grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+
+            {/* Heatmap */}
+            <HeatmapViewer
+              originalB64={analysisData?.original_b64}
+              heatmapB64={analysisData?.heatmap_b64}
+              overlayB64={analysisData?.overlay_b64}
+            />
+
+            {/* Chart + Patient Info */}
+            <div className="flex flex-col gap-4">
+
+              <ConfidenceChart
+                probabilities={analysisData?.probabilities || {}}
+                prediction={analysisData?.prediction}
+              />
+
+              {/* Patient summary */}
+              <div className="bg-slate-800 rounded-xl p-4">
+                <h3 className="text-white font-semibold mb-3">Patient Summary</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-slate-500">Name</p>
+                    <p className="text-white">{uploadData?.patientInfo?.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Age</p>
+                    <p className="text-white">{uploadData?.patientInfo?.age}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Gender</p>
+                    <p className="text-white">{uploadData?.patientInfo?.gender}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Scan Date</p>
+                    <p className="text-white">{uploadData?.patientInfo?.scanDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Referring Doctor</p>
+                    <p className="text-white">
+                      {uploadData?.patientInfo?.referringDoctor || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* AI Disclaimer */}
+          <div className="bg-yellow-900/20 border border-yellow-600/40 rounded-xl px-4 py-3 mb-6">
+            <p className="text-yellow-300 text-xs">
+              ⚠️ This analysis is AI-assisted and intended to support
+              clinical decision-making only. Final diagnosis must be
+              confirmed by a qualified radiologist.
+            </p>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mb-4 bg-red-900/40 border border-red-500 text-red-300 rounded-lg px-4 py-3 text-sm">
+              {error}
+            </div>
           )}
-        </button>
-      </div>
+
+          {/* Generate Report Button */}
+          <div className="text-center">
+            <button
+              onClick={handleGenerateReport}
+              disabled={loading}
+              className="bg-green-500 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold px-10 py-3 rounded-xl transition-all text-sm flex items-center gap-2 mx-auto"
+            >
+              {loading ? 'Generating Report...' : (
+                <>
+                  Generate Medical Report
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </div>
+
+        </>
+      )}
 
     </div>
   )

@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 import os
-
 from app.ml.model import predict_ct_scan
 
 predict_bp = Blueprint('predict', __name__)
@@ -30,7 +29,12 @@ def predict():
         label=result["label"],
         confidence=result["confidence"],
         probabilities=result["probabilities"],
+        anomaly=result["anomaly"],              # NEW
         heatmap_b64=result["heatmap_b64"],
         overlay_b64=result["overlay_b64"],
         original_b64=result["original_b64"],
+        measurements=result["measurements"],
+        is_dicom=result["is_dicom"],
+        pixel_spacing=result["pixel_spacing"],
+        slice_thickness=result["slice_thickness"],
     ), 200

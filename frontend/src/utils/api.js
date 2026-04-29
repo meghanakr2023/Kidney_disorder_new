@@ -8,11 +8,8 @@ const api = axios.create({
 export const uploadScan = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
-
   const response = await api.post('/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: { 'Content-Type': 'multipart/form-data' }
   })
   return response.data
 }
@@ -27,5 +24,15 @@ export const predictScan = async (fileId, filename) => {
 
 export const generateReport = async (payload) => {
   const response = await api.post('/generate-report', payload)
+  return response.data
+}
+
+// NEW
+export const translateReport = async (report, targetLanguage, mode) => {
+  const response = await api.post('/translate-report', {
+    report: report,
+    target_language: targetLanguage,
+    mode: mode,
+  })
   return response.data
 }

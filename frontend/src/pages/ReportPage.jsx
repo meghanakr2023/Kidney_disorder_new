@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Download, Printer, User, Stethoscope, Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import { generateReport, translateReport } from '../utils/api'
+import ReportChatbot from '../components/ReportChatbot'
 
 const C = {
   pageBg:      '#f0f2f5',
@@ -542,6 +543,17 @@ function ReportPage({ reportData, analysisData, onBack }) {
           Do not make any medical decisions based solely on this AI-generated report.
         </p>
       </div>
+
+      {/* Chatbot — available when report is loaded */}
+      {(doctorReport || patientDisplayReport) && (
+        <ReportChatbot
+          report={activeTab === 'doctor' ? doctorReport : patientDisplayReport}
+          prediction={reportData?.prediction}
+          confidence={analysisData?.confidence}
+          mode={activeTab}
+          patientInfo={reportData?.patient_info}
+        />
+      )}
 
     </div>
   )

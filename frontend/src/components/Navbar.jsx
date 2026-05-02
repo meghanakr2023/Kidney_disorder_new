@@ -2,9 +2,9 @@ import { Scan } from 'lucide-react'
 
 function Navbar({ currentPage }) {
   const steps = [
-    { id: 'upload', label: 'Patient & Scan', num: '01' },
-    { id: 'analysis', label: 'AI Analysis', num: '02' },
-    { id: 'report', label: 'Clinical Report', num: '03' }
+    { id: 'upload',   label: 'Patient & Scan', num: '01' },
+    { id: 'analysis', label: 'AI Analysis',    num: '02' },
+    { id: 'report',   label: 'Clinical Report',num: '03' }
   ]
 
   const getStepClass = (stepId) => {
@@ -17,28 +17,30 @@ function Navbar({ currentPage }) {
   }
 
   return (
-    <nav style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}
-      className="px-8 py-4 sticky top-0 z-50 backdrop-blur-sm">
+    <nav style={{
+      background: '#ffffff',
+      borderBottom: '1px solid #dce4ed',
+      boxShadow: '0 1px 6px rgba(21,101,192,0.07)'
+    }}
+      className="px-8 py-4 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
 
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div style={{
-              background: 'linear-gradient(135deg, #00d4ff22, #00d4ff11)',
-              border: '1px solid rgba(0,212,255,0.3)',
-              borderRadius: '10px',
-              padding: '8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <Scan size={20} color="var(--accent-cyan)" />
-            </div>
+          <div style={{
+            background: 'linear-gradient(135deg, #1565c0, #1976d2)',
+            borderRadius: '10px',
+            padding: '8px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(21,101,192,0.25)'
+          }}>
+            <Scan size={20} color="#ffffff" />
           </div>
           <div>
-            <h1 className="font-display text-lg leading-none" style={{ color: 'var(--text-primary)' }}>
-              NeuroScan<span style={{ color: 'var(--accent-cyan)' }}>AI</span>
+            <h1 className="font-display text-lg leading-none" style={{ color: '#1a2332' }}>
+              NeuroScan<span style={{ color: '#1565c0' }}>AI</span>
             </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '2px' }}>
+            <p style={{ color: '#7a93b5', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '2px' }}>
               Renal CT Analysis
             </p>
           </div>
@@ -55,14 +57,14 @@ function Navbar({ currentPage }) {
               </div>
               {i < steps.length - 1 && (
                 <svg width="16" height="2" viewBox="0 0 16 2">
-                  <line x1="0" y1="1" x2="16" y2="1" stroke="var(--border-light)" strokeWidth="1.5" strokeDasharray="3 2" />
+                  <line x1="0" y1="1" x2="16" y2="1" stroke="#dce4ed" strokeWidth="1.5" strokeDasharray="3 2" />
                 </svg>
               )}
             </div>
           ))}
         </div>
 
-        {/* Status */}
+        {/* Status badge */}
         <div className="badge-live">System Online</div>
 
       </div>

@@ -15,20 +15,21 @@ function App() {
 
       {/* Subtle grid background */}
       <div className="grid-bg" style={{
-        position: 'fixed', inset: 0, opacity: 0.35, pointerEvents: 'none', zIndex: 0
+        position: 'fixed', inset: 0, opacity: 0.45, pointerEvents: 'none', zIndex: 0
       }} />
 
-      {/* Glow orbs */}
+      {/* Soft blue glow top-left */}
       <div style={{
-        position: 'fixed', top: '-200px', left: '-200px',
-        width: '600px', height: '600px',
-        background: 'radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 70%)',
+        position: 'fixed', top: '-150px', left: '-150px',
+        width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(21,101,192,0.05) 0%, transparent 70%)',
         pointerEvents: 'none', zIndex: 0
       }} />
+      {/* Soft teal glow bottom-right */}
       <div style={{
-        position: 'fixed', bottom: '-200px', right: '-200px',
-        width: '600px', height: '600px',
-        background: 'radial-gradient(circle, rgba(0,229,160,0.03) 0%, transparent 70%)',
+        position: 'fixed', bottom: '-150px', right: '-150px',
+        width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(0,121,107,0.04) 0%, transparent 70%)',
         pointerEvents: 'none', zIndex: 0
       }} />
 

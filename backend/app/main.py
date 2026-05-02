@@ -6,6 +6,7 @@ from app.api.upload import upload_bp
 from app.api.predict import predict_bp
 from app.api.report import report_bp
 from app.api.chat import chat_bp
+from app.api.history import history_bp
 
 def create_app():
     app = Flask(__name__)
@@ -19,6 +20,7 @@ def create_app():
     app.register_blueprint(predict_bp, url_prefix='/api')
     app.register_blueprint(report_bp, url_prefix='/api')
     app.register_blueprint(chat_bp, url_prefix='/api')
+    app.register_blueprint(history_bp, url_prefix='/api')
 
     @app.get('/')
     def root():

@@ -13,7 +13,7 @@ const C = {
   textLight: '#607d8b',
 }
 
-export default function ReportChatbot({ report, prediction, confidence, mode, patientInfo }) {
+export default function ReportChatbot({ report, prediction, confidence, mode, patientInfo, mongoId }) {
   const [open, setOpen]       = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput]     = useState('')
@@ -42,6 +42,7 @@ export default function ReportChatbot({ report, prediction, confidence, mode, pa
   }, [open])
 
   const sendMessage = async () => {
+    console.log('sending with mongoId:', mongoId)
     if (!input.trim() || loading) return
 
     const userMessage = input.trim()
@@ -61,6 +62,7 @@ export default function ReportChatbot({ report, prediction, confidence, mode, pa
           mode,
           patient_info: patientInfo,
           history: messages.filter(m => m.role !== 'system'),
+          mongo_id: mongoId,
         }),
       })
 

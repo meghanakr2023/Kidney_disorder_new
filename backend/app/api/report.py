@@ -2,8 +2,10 @@ from flask import Blueprint, request, jsonify
 import os
 from app.report_generator.report_generator import generate_report_with_llm
 from app.report_generator.report_generator import translate_report as translate_report_llm
+from app.database import save_scan, update_scan
 
 report_bp = Blueprint('report', __name__)
+
 
 @report_bp.post("/generate-report")
 def generate_report():
@@ -25,11 +27,10 @@ def generate_report():
     image_path = os.path.join("static/uploads", filename) if filename else None
     gemini_key = data.get('api_key') or os.getenv("GEMINI_API_KEY")
     measurements = data.get('measurements', {})
+    mongo_id = data.get('mongo_id')
 
     print(f"Filename received: {filename}")
-    print(f"Image path: {image_path}")
     print(f"Image exists: {os.path.exists(image_path) if image_path else False}")
-    print(f"API key received: {gemini_key[:15] if gemini_key else 'None'}")
     print(f"Measurements available: {measurements.get('available', False)}")
 
     try:
@@ -48,6 +49,44 @@ def generate_report():
         traceback.print_exc()
         return jsonify(error=f"Report generation failed: {str(e)}"), 500
 
+    # Save to MongoDB
+    try:
+        if mode == 'doctor' and not mongo_id:
+            mongo_id = save_scan({
+                "file_id":       data['file_id'],
+                "filename":      filename,
+                "patient_info":  data['patient_info'],
+                "prediction":    data['prediction'],
+                "confidence":    data['confidence'],
+                "probabilities": data['probabilities'],
+                "measurements":  measurements,
+                "is_anomaly":    data.get('is_anomaly', False),
+                "doctor_report": report_data,
+                "patient_report": None,
+                "chat_history":  [],
+            })
+            print(f"New scan saved to MongoDB: {mongo_id}")
+        elif mode == 'patient' and mongo_id:
+            update_scan(mongo_id, {"patient_report": report_data})
+            print(f"Patient report added to MongoDB: {mongo_id}")
+        elif mode == 'patient' and not mongo_id:
+            mongo_id = save_scan({
+                "file_id":       data['file_id'],
+                "filename":      filename,
+                "patient_info":  data['patient_info'],
+                "prediction":    data['prediction'],
+                "confidence":    data['confidence'],
+                "probabilities": data['probabilities'],
+                "measurements":  measurements,
+                "is_anomaly":    data.get('is_anomaly', False),
+                "doctor_report": None,
+                "patient_report": report_data,
+                "chat_history":  [],
+            })
+    except Exception as e:
+        print(f"MongoDB save error (non-critical): {e}")
+        mongo_id = None
+
     return jsonify(
         file_id=data['file_id'],
         filename=filename,
@@ -56,6 +95,7 @@ def generate_report():
         prediction=data['prediction'],
         confidence=data['confidence'],
         report=report_data,
+        mongo_id=mongo_id,
     ), 200
 
 

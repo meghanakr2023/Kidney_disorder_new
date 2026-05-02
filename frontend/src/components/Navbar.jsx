@@ -1,4 +1,4 @@
-import { Scan } from 'lucide-react'
+import { Scan, Clock } from 'lucide-react'
 
 function Navbar({ currentPage }) {
   const steps = [
@@ -63,6 +63,19 @@ function Navbar({ currentPage }) {
             </div>
           ))}
         </div>
+
+        <button
+  onClick={() => window.dispatchEvent(new CustomEvent('goto-history'))}
+  style={{
+    display: 'flex', alignItems: 'center', gap: '6px',
+    padding: '6px 14px', borderRadius: '8px',
+    background: '#f0f4f8', border: '1px solid #dce4ed',
+    cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+    color: '#3d5278', fontFamily: "'DM Sans', sans-serif",
+  }}
+>
+  <Clock size={13} /> History
+</button>
 
         {/* Status badge */}
         <div className="badge-live">System Online</div>

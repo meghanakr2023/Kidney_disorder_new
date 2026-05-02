@@ -292,6 +292,7 @@ function ReportPage({ reportData, analysisData, onBack }) {
   const doctorReport = reportData?.report
   const patientDisplayReport = translatedReport || patientReport?.report
   const pi = reportData?.patient_info || {}
+  console.log('mongo_id value:', reportData?.mongo_id)
   const today = pi.scanDate || new Date().toLocaleDateString('en-IN')
   const severityColor = { Tumor: C.accentRed, Stone: C.accentAmber, Cyst: C.accentBlue, Normal: C.accentTeal }[reportData?.prediction] || C.accentBlue
 
@@ -552,6 +553,7 @@ function ReportPage({ reportData, analysisData, onBack }) {
           confidence={analysisData?.confidence}
           mode={activeTab}
           patientInfo={reportData?.patient_info}
+          mongoId={reportData?.mongo_id}
         />
       )}
 

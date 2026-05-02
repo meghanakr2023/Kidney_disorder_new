@@ -1,14 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from './components/Navbar'
 import UploadPage from './pages/UploadPage'
 import AnalysisPage from './pages/AnalysisPage'
 import ReportPage from './pages/ReportPage'
+import HistoryPage from './pages/HistoryPage'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('upload')
   const [uploadData, setUploadData] = useState(null)
   const [analysisData, setAnalysisData] = useState(null)
   const [reportData, setReportData] = useState(null)
+  
+
+  useEffect(() => {
+    const handler = () => setCurrentPage('history')
+    window.addEventListener('goto-history', handler)
+    return () => window.removeEventListener('goto-history', handler)
+  }, [])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative' }}>
@@ -67,6 +75,9 @@ function App() {
               analysisData={analysisData}
               onBack={() => setCurrentPage('analysis')}
             />
+          )}
+          {currentPage === 'history' && (
+            <HistoryPage onBack={() => setCurrentPage('upload')} />
           )}
 
         </main>

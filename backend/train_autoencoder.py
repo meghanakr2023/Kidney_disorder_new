@@ -5,12 +5,13 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 import numpy as np
 import os
+from dicom_dataset import DICOMDataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IMG_SIZE = 224
 BATCH_SIZE = 32
 EPOCHS = 30
-DATA_DIR = "dataset/train" # your training data path
+DATA_DIR = "data_dicom/autoencoder_train" # your training data path
 
 
 # ── Autoencoder Architecture ───────────────────────────────────────────────────
@@ -91,7 +92,7 @@ def train():
         # to reconstruct properly with Sigmoid output
     ])
 
-    dataset = datasets.ImageFolder(DATA_DIR, transform=transform)
+    dataset = DICOMDataset(DATA_DIR, transform=transform)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE,
                         shuffle=True, num_workers=2)
 

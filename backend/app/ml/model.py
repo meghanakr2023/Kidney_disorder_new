@@ -189,7 +189,7 @@ def check_anomaly(img_pil):
             (input_tensor - reconstructed) ** 2
         ).item()
 
-    is_anomaly = error > threshold
+    is_anomaly = False
 
     # Normalize to 0-100 score
     # score = 50 means exactly at threshold
@@ -353,26 +353,53 @@ class GradCAM:
 # ─── MAIN PREDICTION ──────────────────────────────────────────────────────────
 
 def predict_ct_scan(filepath):
+    print("=== predict_ct_scan CALLED ===")
     model = get_model()
 
     # ── Load image ─────────────────────────────────────────────────────────────
-    is_dicom = filepath.lower().endswith('.dcm')
+    if not filepath.lower().endswith(".dcm"):
+        raise ValueError(
+        "Only DICOM (.dcm) files are supported."
+    )
 
-    if is_dicom:
-        img_pil, raw_hu, pixel_spacing, slice_thickness = load_dicom(filepath)
-        print(f"DICOM loaded — pixel spacing: {pixel_spacing} mm")
-    else:
-        img_pil = Image.open(filepath).convert("RGB")
-        raw_hu = None
-        pixel_spacing = [1.0, 1.0]
-        slice_thickness = 1.0
+    img_pil, raw_hu, pixel_spacing, slice_thickness = load_dicom(filepath)
+
+    is_dicom = True
 
     original_np = np.array(img_pil.resize((IMG_SIZE, IMG_SIZE)))
     input_tensor = val_transforms(img_pil).unsqueeze(0).to(DEVICE)
 
+    
     # ── STEP 1: Anomaly Detection ───────────────────────────────────────────────
     print("Checking for anomalies...")
     is_anomaly, reconstruction_error, anomaly_score = check_anomaly(img_pil)
+    print("Reconstruction Error:", reconstruction_error)
+    print("Anomaly Score:", anomaly_score)
+
+# Reject obviously non-kidney / invalid scans
+    if reconstruction_error > 0.10:
+        return {
+        "prediction": "Invalid Scan",
+        "label": "Invalid Scan",
+        "confidence": 0,
+        "probabilities": {},
+        "anomaly": {
+            "is_anomaly": True,
+            "score": anomaly_score,
+            "reconstruction_error": reconstruction_error,
+            "message": (
+                "Uploaded image does not appear to be a valid kidney CT scan. "
+                "Please upload a kidney DICOM image."
+            ),
+        },
+        "heatmap_b64": None,
+        "overlay_b64": None,
+        "original_b64": _np_to_b64(original_np),
+        "measurements": {"available": False},
+        "is_dicom": True,
+        "pixel_spacing": pixel_spacing,
+        "slice_thickness": slice_thickness,
+    }
 
     # ── STEP 2: Standard Classification ────────────────────────────────────────
     model.eval()

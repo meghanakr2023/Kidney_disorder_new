@@ -17,3 +17,7 @@ frontend/node_modules/
 
 # Env
 .env
+venv/
+myenv/
+backend/data_dicom/
+*.lnk

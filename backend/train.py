@@ -3,9 +3,10 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torchvision import transforms
 import torchvision.models as models
 from tqdm import tqdm
+from dicom_dataset import DICOMDataset
 
 CLASSES = ["Cyst", "Normal", "Stone", "Tumor"]
 IMG_SIZE = 224
@@ -72,8 +73,8 @@ def train(data_dir, epochs, batch_size, lr):
     if not os.path.isdir(val_dir):
         raise FileNotFoundError(f"Val folder not found: {val_dir}")
 
-    train_dataset = datasets.ImageFolder(train_dir, transform=train_tf)
-    val_dataset = datasets.ImageFolder(val_dir, transform=test_tf)
+    train_dataset = DICOMDataset(train_dir,transform=train_tf)
+    val_dataset = DICOMDataset(val_dir,transform=test_tf)
 
     print(f"Train images found: {len(train_dataset)}")
     print(f"Val images found  : {len(val_dataset)}")

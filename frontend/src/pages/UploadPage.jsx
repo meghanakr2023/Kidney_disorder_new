@@ -20,23 +20,37 @@ function UploadPage({ onAnalysisDone }) {
   })
 
   const handleFileChange = (e) => {
-    const selected = e.target.files[0]
-    if (selected) {
-      setFile(selected)
-      setPreview(URL.createObjectURL(selected))
-      setError(null)
-    }
+  const selected = e.target.files[0]
+
+  if (!selected) return
+
+  if (!selected.name.toLowerCase().endsWith('.dcm')) {
+    setError('Only DICOM (.dcm) files are supported')
+    return
   }
 
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setDragOver(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped) {
-      setFile(dropped)
-      setPreview(URL.createObjectURL(dropped))
-      setError(null)
-    }
+  setFile(selected)
+  setPreview(null) // DICOM can't be previewed directly
+  setError(null)
+}
+
+const handleDrop = (e) => {
+  e.preventDefault()
+  setDragOver(false)
+
+  const dropped = e.dataTransfer.files[0]
+
+  if (!dropped) return
+
+  if (!dropped.name.toLowerCase().endsWith('.dcm')) {
+    setError('Only DICOM (.dcm) files are supported')
+    return
+  }
+
+  setFile(dropped)
+  setPreview(null) // DICOM can't be previewed directly
+  setError(null)
+
   }
 
   const handleInputChange = (e) => {
@@ -44,7 +58,10 @@ function UploadPage({ onAnalysisDone }) {
   }
 
   const handleSubmit = async () => {
-    if (!file) { setError('Please upload a CT scan image'); return }
+    if (!file) {
+    setError('Please upload a DICOM (.dcm) CT scan');
+    return;
+}
     if (!patientInfo.name || !patientInfo.age || !patientInfo.gender || !patientInfo.scanDate) {
       setError('Please fill in all required patient fields'); return
     }
@@ -146,7 +163,7 @@ function UploadPage({ onAnalysisDone }) {
                 <div style={{
                   display: 'flex', gap: '6px', justifyContent: 'center'
                 }}>
-                  {['JPEG', 'PNG', 'DCM'].map(fmt => (
+                  {['DCM'].map(fmt => (
                     <span key={fmt} style={{
                       padding: '2px 8px', borderRadius: '4px',
                       fontSize: '10px', fontWeight: 600,
@@ -162,7 +179,13 @@ function UploadPage({ onAnalysisDone }) {
             )}
           </div>
 
-          <input id="fileInput" type="file" accept="image/*,.dcm" onChange={handleFileChange} style={{ display: 'none' }} />
+          <input
+  id="fileInput"
+  type="file"
+  accept=".dcm"
+  onChange={handleFileChange}
+  style={{ display: 'none' }}
+/>
 
           {file && (
             <div style={{
@@ -182,7 +205,7 @@ function UploadPage({ onAnalysisDone }) {
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
             {[
               { label: 'Max Size', value: '20 MB' },
-              { label: 'Format', value: 'JPG / PNG / DCM' },
+              { label: 'Format', value: 'DICOM (.DCM)' },
             ].map(item => (
               <div key={item.label} style={{
                 flex: 1, padding: '10px 12px', borderRadius: '8px',

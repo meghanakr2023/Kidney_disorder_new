@@ -7,7 +7,7 @@ backend/myenv/
 
 # Dataset & models
 backend/dataset/
-backend/models/
+
 
 # Uploaded files
 backend/static/uploads/

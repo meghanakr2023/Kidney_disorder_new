@@ -21,3 +21,6 @@ venv/
 myenv/
 backend/data_dicom/
 *.lnk
+
+
+frontend/.env

@@ -11,7 +11,11 @@ from app.api.history import history_bp
 def create_app():
     app = Flask(__name__)
 
-    CORS(app, origins=["http://localhost:3000", "http://localhost:5173"])
+    CORS(app, origins=[
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://kidneyscan-frontend.onrender.com"
+])
 
     os.makedirs("static/uploads", exist_ok=True)
     os.makedirs("static/heatmaps", exist_ok=True)

@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { Clock, Search, Trash2, Eye, User, Calendar, ChevronRight, X } from 'lucide-react'
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api', timeout: 30000 })
+const BASE_URL = import.meta.env.VITE_API_URL
+
+const api = axios.create({
+  baseURL: `${BASE_URL}/api`,
+  timeout: 30000
+})
 
 const severityColor = {
   Tumor:  { color: '#c62828', bg: 'rgba(198,40,40,0.08)',  border: 'rgba(198,40,40,0.2)'  },
